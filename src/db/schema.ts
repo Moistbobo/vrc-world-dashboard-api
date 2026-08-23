@@ -141,8 +141,8 @@ const MIGRATIONS: Migration[] = [
       db.exec(`
         INSERT INTO roles (name, permissions) VALUES
           ('viewer',  '["worlds:read","tags:read","meta:read"]'),
-          ('curator', '["worlds:read","tags:read","meta:read","worlds:write"]'),
-          ('admin',   '["worlds:read","tags:read","meta:read","worlds:write"]');
+          ('curator', '["worlds:read","tags:read","meta:read","worlds:write","tags:write"]'),
+          ('admin',   '["worlds:read","tags:read","meta:read","worlds:write","tags:write"]');
       `);
     }
   },
@@ -181,6 +181,38 @@ const MIGRATIONS: Migration[] = [
             REFERENCES world_records(world_id, guild_id) ON DELETE CASCADE
         );
       `);
+    }
+  },
+  {
+    name: '009_grant_tags_write_to_curator_and_admin',
+    run: (db) => {
+      const selectStmt = db.prepare(
+        'SELECT permissions FROM roles WHERE name = ?'
+      );
+      const updateStmt = db.prepare(
+        'UPDATE roles SET permissions = ? WHERE name = ?'
+      );
+      for (const roleName of ['curator', 'admin']) {
+        const row = selectStmt.get(roleName) as
+          { permissions: string } | undefined;
+        if (!row) continue;
+        let permissions: unknown;
+        try {
+          permissions = JSON.parse(row.permissions);
+        } catch {
+          continue;
+        }
+        if (
+          !Array.isArray(permissions) ||
+          !permissions.every((permission) => typeof permission === 'string')
+        ) {
+          continue;
+        }
+        if (!permissions.includes('tags:write')) {
+          permissions.push('tags:write');
+          updateStmt.run(JSON.stringify(permissions), roleName);
+        }
+      }
     }
   }
 ];

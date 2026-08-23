@@ -24,6 +24,11 @@ export interface UpdateTagsBody {
   messageTimestamp?: number;
 }
 
+export interface UpdateTagsEditBody {
+  guildId: string;
+  tags: string[];
+}
+
 export interface ExtractWorldsBody {
   content: string;
 }
@@ -137,4 +142,15 @@ export function parseUpdateTagsBody(body: unknown): UpdateTagsBody | null {
     tagSource: tagSource as string | undefined,
     messageTimestamp: messageTimestamp as number | undefined
   };
+}
+
+export function parseUpdateTagsEditBody(
+  body: unknown
+): UpdateTagsEditBody | null {
+  if (!isObject(body)) return null;
+  if (!isNonEmptyString(body.guildId)) return null;
+  if (!Array.isArray(body.tags)) return null;
+  if (body.tags.length > 20) return null;
+  if (!body.tags.every((value) => typeof value === 'string')) return null;
+  return { guildId: body.guildId, tags: body.tags as string[] };
 }

@@ -6,6 +6,7 @@ const PERMISSIONS_HELP = [
   'worlds:read   Read world records',
   'worlds:write  Add, delete, and update world records',
   'tags:read     List all tags',
+  'tags:write    Set tags on a world record',
   'meta:read     Read dataset metadata counts'
 ].join('\n');
 
