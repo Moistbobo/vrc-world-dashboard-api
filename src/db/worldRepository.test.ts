@@ -95,9 +95,9 @@ describe('world records', () => {
     test('returns false when the record does not exist', () => {
       const repo = new WorldRepository(db);
 
-      expect(
-        repo.updateTagsOnly('wrld_missing', 'guild-1', ['horror'])
-      ).toBe(false);
+      expect(repo.updateTagsOnly('wrld_missing', 'guild-1', ['horror'])).toBe(
+        false
+      );
     });
   });
 });
