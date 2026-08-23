@@ -2,6 +2,7 @@ export const PERMISSIONS = [
   'worlds:read',
   'worlds:write',
   'tags:read',
+  'tags:write',
   'meta:read'
 ] as const;
 
