@@ -1,4 +1,4 @@
-import { extractTags } from './extractor';
+import { extractTags, validateTags } from './extractor';
 
 jest.mock('../logger', () => ({
   __esModule: true,
@@ -45,5 +45,39 @@ describe('extractTags', () => {
 
   it('deduplicates tags', () => {
     expect(extractTags('Tags: horror, horror')).toEqual(['horror']);
+  });
+});
+
+describe('validateTags', () => {
+  it('canonicalizes variant spellings', () => {
+    expect(validateTags(['vrmv'])).toEqual({
+      valid: ['particle live / vrmv'],
+      invalid: []
+    });
+  });
+
+  it('normalizes case and whitespace', () => {
+    expect(validateTags(['  HORROR ', 'Game'])).toEqual({
+      valid: ['horror', 'game'],
+      invalid: []
+    });
+  });
+
+  it('deduplicates valid tags', () => {
+    expect(validateTags(['horror', 'HORROR', 'horror'])).toEqual({
+      valid: ['horror'],
+      invalid: []
+    });
+  });
+
+  it('rejects unknown tags into invalid preserving the original value', () => {
+    expect(validateTags(['nope', 'horror', 'NOPE2'])).toEqual({
+      valid: ['horror'],
+      invalid: ['nope', 'NOPE2']
+    });
+  });
+
+  it('returns empty valid and invalid for an empty array', () => {
+    expect(validateTags([])).toEqual({ valid: [], invalid: [] });
   });
 });

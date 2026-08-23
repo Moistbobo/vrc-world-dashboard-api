@@ -3,14 +3,15 @@ import { getWorldRepository } from '../../db/worldRepository';
 import { getHighPriorityRepository } from '../../db/highPriorityRepository';
 import { addWorld, WorldServiceError } from '../../worlds/service';
 import { extractAllWorldIdsFromMessage } from '../../extraction/pipeline';
-import { extractTags } from '../../tags/extractor';
+import { extractTags, validateTags } from '../../tags/extractor';
 import { sanitizeRecord } from '../utils/sanitize';
 import {
   parseAddWorldBody,
   parseExtractWorldsBody,
   parseGuildIdBody,
   parseUpdateQualityBody,
-  parseUpdateTagsBody
+  parseUpdateTagsBody,
+  parseUpdateTagsEditBody
 } from '../utils/validation';
 import { requirePermission, type TokenRequest } from '../middleware/auth';
 
@@ -149,6 +150,37 @@ router.put(
       body.sourceContent
     );
     response.send({ updated, tags });
+  }
+);
+
+// PUT /api/worlds/:worldId/tags/edit
+router.put(
+  '/api/worlds/:worldId/tags/edit',
+  requirePermission('tags:write'),
+  (request, response) => {
+    const { worldId } = request.params as { worldId: string };
+    const body = parseUpdateTagsEditBody(request.body);
+    if (!body) {
+      return response.status(400).send({
+        error: 'Invalid body. Expected { guildId, tags }'
+      });
+    }
+
+    const repo = getWorldRepository();
+    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    if (!exists) {
+      return response.status(404).send({ error: 'World not found' });
+    }
+
+    const { valid, invalid } = validateTags(body.tags);
+    if (invalid.length > 0) {
+      return response.status(400).send({
+        error: `Invalid tags: ${invalid.join(', ')}`
+      });
+    }
+
+    const updated = repo.updateTagsOnly(worldId, body.guildId, valid);
+    response.send({ updated, tags: valid });
   }
 );
 

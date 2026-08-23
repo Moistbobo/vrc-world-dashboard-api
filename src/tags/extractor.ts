@@ -180,3 +180,29 @@ export function extractTags(content: string): string[] {
   logger.debug(`Extracted tags from content: ${JSON.stringify(result)}`);
   return result;
 }
+
+/**
+ * Validate a list of tags against the taxonomy. Returns the canonical
+ * forms of valid tags (deduplicated, first-occurrence order) and the
+ * original values of invalid tags.
+ */
+export function validateTags(tags: string[]): {
+  valid: string[];
+  invalid: string[];
+} {
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  const seen = new Set<string>();
+  for (const tag of tags) {
+    const canonical = validate(tag.trim().toLowerCase());
+    if (canonical) {
+      if (!seen.has(canonical)) {
+        seen.add(canonical);
+        valid.push(canonical);
+      }
+    } else {
+      invalid.push(tag);
+    }
+  }
+  return { valid, invalid };
+}

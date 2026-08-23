@@ -303,6 +303,39 @@ export class WorldRepository {
   }
 
   /**
+   * Set tags on a specific world record without touching source_content.
+   * Preserves all other fields. Skips the UPDATE when the tags are unchanged.
+   */
+  updateTagsOnly(worldId: string, guildId: string, tags: string[]): boolean {
+    const existing = this.getByWorldAndGuild(worldId, guildId);
+    if (!existing) {
+      return false;
+    }
+
+    if (JSON.stringify(existing.tags) === JSON.stringify(tags)) {
+      logger.debug(
+        `Skipping tag-only update for world ${worldId} in guild ${guildId}: tags unchanged`
+      );
+      return false;
+    }
+
+    const sql = `
+      UPDATE world_records
+      SET tags = ?, updated_at = strftime('%s','now')
+      WHERE world_id = ? AND guild_id = ?
+    `;
+    const stmt = this.db.prepare(sql);
+    const result = stmt.run(JSON.stringify(tags), worldId, guildId);
+    const didUpdate = result.changes > 0;
+    if (didUpdate) {
+      logger.info(
+        `Updated tags for world ${worldId} in guild ${guildId}: [${tags.join(', ')}]`
+      );
+    }
+    return didUpdate;
+  }
+
+  /**
    * Get all world_id-guild_id pairs for caching.
    */
   getAllWorldGuildPairs(): Set<string> {

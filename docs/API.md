@@ -60,7 +60,7 @@ holding it, without re-provisioning tokens.
 | Role | Permissions |
 |------|-------------|
 | `viewer` | `worlds:read`, `tags:read`, `meta:read` |
-| `curator` | viewer permissions plus `worlds:write` |
+| `curator` | viewer permissions plus `worlds:write`, `tags:write` |
 | `admin` | same as curator today; token generation is planned future work |
 
 The seed roles are created automatically by the database migration. Custom
@@ -84,6 +84,7 @@ pnpm role:update -- --name curator-v2 --add meta:read --remove tags:read
 | `worlds:read` | `GET /api/worlds`, `GET /api/worlds/search`, `GET /api/worlds/pairs`, `GET /api/worlds/:worldId`, `POST /api/worlds/extract` |
 | `worlds:write` | `POST /api/worlds`, `DELETE /api/worlds/:worldId`, `PUT /api/worlds/:worldId/quality`, `PUT /api/worlds/:worldId/tags`, `PUT /api/worlds/:worldId/high-priority`, `DELETE /api/worlds/:worldId/high-priority` |
 | `tags:read` | `GET /api/tags` |
+| `tags:write` | `PUT /api/worlds/:worldId/tags/edit` |
 | `meta:read` | `GET /api/meta` |
 
 `GET /api/me` requires no specific permission — any valid token can read its own
@@ -639,6 +640,54 @@ record must exist in `world_records`.
 
 ---
 
+### 15. Edit World Tags
+
+```
+PUT /api/worlds/:worldId/tags/edit
+```
+
+Directly sets the tags on the `(worldId, guildId)` record. Unlike
+`PUT /api/worlds/:worldId/tags` (which recomputes tags from message content),
+the client supplies the tags and `source_content` is left untouched. Requires
+the `tags:write` permission (held by `curator` and `admin` roles).
+
+Tags are validated against the shared taxonomy; variant spellings are
+canonicalized server-side (e.g. `vrmv` → `particle live / vrmv`). Unknown
+tags cause a `400` naming the invalid values. An empty `tags` array clears the
+world's tags. No-op when the tags are unchanged.
+
+**Request body**
+
+```json
+{
+  "guildId": "123456789012345678",
+  "tags": ["horror", "game"]
+}
+```
+
+`tags` accepts up to 20 strings.
+
+**Success** — status `200`:
+
+```json
+{
+  "updated": true,
+  "tags": ["horror", "game"]
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `400`  | `{ "error": "Invalid body. Expected { guildId, tags }" }` |
+| `400`  | `{ "error": "Invalid tags: <unknown tags>" }` |
+| `401`  | `{ "error": "Unauthorized" }` |
+| `403`  | `{ "error": "Forbidden" }` |
+| `404`  | `{ "error": "World not found" }` |
+
+---
+
 ## World Record Schema
 
 Each world object returned by the API has the following fields:
@@ -742,6 +791,12 @@ curl -X PUT -H "Authorization: Bearer my-token" \
     "sourceContent": "the original message text"
   }' \
   http://localhost:3000/api/worlds/wrld_abc123/tags
+
+# Edit tags directly (tags:write token required; tags validated against taxonomy)
+curl -X PUT -H "Authorization: Bearer my-token" \
+  -H "Content-Type: application/json" \
+  -d '{"guildId": "123456789012345678", "tags": ["horror", "game"]}' \
+  http://localhost:3000/api/worlds/wrld_abc123/tags/edit
 
 # Extract world IDs from message content (Twitter/X resolution included)
 curl -X POST -H "Authorization: Bearer my-token" \

@@ -50,7 +50,8 @@ jest.mock('../extraction/pipeline', () => ({
 }));
 
 jest.mock('../tags/extractor', () => ({
-  extractTags: jest.fn()
+  extractTags: jest.fn(),
+  validateTags: jest.fn()
 }));
 
 jest.mock('../vrchat/client', () => ({
@@ -64,7 +65,7 @@ import { getWorldRepository } from '../db/worldRepository';
 import { getTokenRepository } from '../db/tokenRepository';
 import { addWorld } from '../worlds/service';
 import { extractAllWorldIdsFromMessage } from '../extraction/pipeline';
-import { extractTags } from '../tags/extractor';
+import { extractTags, validateTags } from '../tags/extractor';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
@@ -528,6 +529,161 @@ describe('API mutations', () => {
         .send({ guildId: 'guild-1', sourceContent: 'Tags: horror' });
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('PUT /api/worlds/:worldId/tags/edit', () => {
+    const tagsWritePermissions = [
+      'worlds:read',
+      'tags:read',
+      'meta:read',
+      'worlds:write',
+      'tags:write'
+    ];
+
+    it('returns 401 without a token', async () => {
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .send({ guildId: 'guild-1', tags: ['horror'] });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('returns 403 when the token lacks tags:write', async () => {
+      mockTokenRepo(['worlds:read', 'tags:read', 'meta:read', 'worlds:write']);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: ['horror'] });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ error: 'Forbidden' });
+    });
+
+    it('returns 400 when guildId is missing', async () => {
+      mockTokenRepo(tagsWritePermissions);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ tags: ['horror'] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('Invalid body');
+    });
+
+    it('returns 400 when tags is not an array', async () => {
+      mockTokenRepo(tagsWritePermissions);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: 'horror' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('returns 400 when tags has more than 20 entries', async () => {
+      mockTokenRepo(tagsWritePermissions);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: Array(21).fill('horror') });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('returns 400 when tags contains a non-string entry', async () => {
+      mockTokenRepo(tagsWritePermissions);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: ['horror', 5] });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('returns 404 when world does not exist', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: ['horror'] });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('returns 400 listing invalid tags', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(validateTags).mockReturnValue({ valid: [], invalid: ['nope'] });
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getByWorldAndGuild: jest.fn(() => ({})) })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: ['nope'] });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'Invalid tags: nope' });
+    });
+
+    it('returns 200 with updated: true and passes canonical tags to the repo', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(validateTags).mockReturnValue({
+        valid: ['horror', 'game'],
+        invalid: []
+      });
+      const updateTagsOnly = jest.fn(() => true);
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateTagsOnly
+        })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: ['Horror', ' vrmv '] });
+
+      expect(response.status).toBe(200);
+      expect(updateTagsOnly).toHaveBeenCalledWith(
+        VALID_BODY.worldId,
+        'guild-1',
+        ['horror', 'game']
+      );
+      expect(response.body).toEqual({
+        updated: true,
+        tags: ['horror', 'game']
+      });
+    });
+
+    it('returns 200 with updated: false when tags are unchanged', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(validateTags).mockReturnValue({ valid: ['horror'], invalid: [] });
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateTagsOnly: jest.fn(() => false)
+        })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: ['horror'] });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ updated: false, tags: ['horror'] });
     });
   });
 
