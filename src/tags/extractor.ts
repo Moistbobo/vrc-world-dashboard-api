@@ -3,7 +3,7 @@ import logger from '../logger';
 /**
  * Canonical taxonomy tags for VRChat world categorization.
  */
-const TAXONOMY = new Set<string>([
+export const taxonomyTags: string[] = [
   'kino',
   'chill',
   'comfy',
@@ -21,7 +21,9 @@ const TAXONOMY = new Set<string>([
   'gamerip',
   'portal',
   'liminal'
-]);
+];
+
+const TAXONOMY = new Set<string>(taxonomyTags);
 
 /**
  * Maps variant spellings / synonyms to their canonical taxonomy form.

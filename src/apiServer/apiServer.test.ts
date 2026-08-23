@@ -43,6 +43,7 @@ jest.mock('../vrchat/client', () => ({
 import { getWorldRepository } from '../db/worldRepository';
 import { getTokenRepository } from '../db/tokenRepository';
 import { searchWorldsByName } from '../vrchat/client';
+import { taxonomyTags } from '../tags/extractor';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
@@ -433,7 +434,7 @@ describe('API Server', () => {
   });
 
   describe('GET /api/tags', () => {
-    it('returns unique tags with counts', async () => {
+    it('returns used tags with counts and unused taxonomy tags as zero', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
 
       const response = await request(app)
@@ -441,10 +442,28 @@ describe('API Server', () => {
         .set('authorization', 'Bearer test-token');
 
       expect(response.status).toBe(200);
-      expect(response.body.tags).toEqual([
-        { tag: 'horror', count: 312 },
-        { tag: 'game', count: 145 }
-      ]);
+      const body = response.body;
+
+      // Tags present in the DB keep their real counts.
+      const byTag = new Map(
+        body.tags.map((t: { tag: string; count: number }) => [t.tag, t.count])
+      );
+      expect(byTag.get('horror')).toBe(312);
+      expect(byTag.get('game')).toBe(145);
+
+      // Every canonical taxonomy tag is returned, including unused ones at 0.
+      for (const tag of ['kino', 'chill', 'comfy']) {
+        expect(byTag.get(tag)).toBe(0);
+      }
+      expect(body.tags).toHaveLength(taxonomyTags.length);
+
+      // Sorted by count descending, ties resolved alphabetically.
+      const counts = body.tags.map((t: { count: number }) => t.count);
+      expect(counts).toEqual([...counts].sort((a, b) => b - a));
+      const zeroTags = body.tags
+        .filter((t: { count: number }) => t.count === 0)
+        .map((t: { tag: string }) => t.tag);
+      expect(zeroTags).toEqual([...zeroTags].sort());
     });
   });
 
