@@ -19,6 +19,10 @@ describe('extractTags', () => {
     expect(extractTags('タグ：ホラー')).toEqual([]);
   });
 
+  it('extracts the flying tag', () => {
+    expect(extractTags('Tags: flying')).toEqual(['flying']);
+  });
+
   it('canonicalizes variant spellings', () => {
     expect(extractTags('Tags: vrmv')).toEqual(['particle live / vrmv']);
   });
