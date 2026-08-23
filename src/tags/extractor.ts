@@ -15,6 +15,7 @@ const TAXONOMY = new Set<string>([
   'meme',
   'puzzle',
   'driving',
+  'flying',
   'tech',
   'nature',
   'gamerip',
