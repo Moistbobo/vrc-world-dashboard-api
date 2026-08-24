@@ -106,6 +106,33 @@ describe('world records', () => {
       ).toBe(false);
     });
   });
+
+  describe('getAllPaginated', () => {
+    test('filters by worldIds without malformed bind params', async () => {
+      await addWorld('wrld_abc', 'guild-1');
+      await addWorld('wrld_def', 'guild-2');
+      const repo = new WorldRepository(queryable);
+
+      const page = await repo.getAllPaginated(10, 0, {
+        worldIds: ['wrld_abc', 'wrld_def']
+      });
+      expect(page.total).toBe(2);
+      expect(page.rows.map((r) => r.worldId).sort()).toEqual([
+        'wrld_abc',
+        'wrld_def'
+      ]);
+    });
+
+    test('filters by quality values without malformed bind params', async () => {
+      await addWorld('wrld_abc', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_abc', 'guild-1', 'good');
+
+      const page = await repo.getAllPaginated(10, 0, { quality: ['good'] });
+      expect(page.total).toBe(1);
+      expect(page.rows[0].quality).toBe('good');
+    });
+  });
 });
 
 describe('migration 009_grant_tags_write_to_curator_and_admin', () => {
