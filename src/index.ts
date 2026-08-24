@@ -1,9 +1,18 @@
 import Config from './config';
 import logger from './logger';
 import { createApiServer } from './apiServer';
+import { runMigrations } from './db/schema';
+import { getQueryable } from './db/pool';
 import { ensureAuthenticated } from './vrchat/client';
 
 async function main() {
+  try {
+    await runMigrations(getQueryable());
+  } catch (error) {
+    logger.error('Failed to run database migrations:', error);
+    process.exit(1);
+  }
+
   try {
     const currentUser = await ensureAuthenticated();
     logger.info(`Authenticated with VRChat as ${currentUser.displayName}`);

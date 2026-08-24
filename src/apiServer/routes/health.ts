@@ -3,8 +3,8 @@ import { getWorldRepository } from '../../db/worldRepository';
 
 const router = Router();
 
-router.get('/api/health', (_request, response) => {
-  const count = getWorldRepository().count();
+router.get('/api/health', async (_request, response) => {
+  const count = await getWorldRepository().count();
   response.send({
     status: 'ok',
     worldCount: count,

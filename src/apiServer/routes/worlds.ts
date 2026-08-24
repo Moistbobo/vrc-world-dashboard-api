@@ -10,7 +10,7 @@ const router = Router();
 router.get(
   '/api/worlds',
   requirePermission('worlds:read'),
-  (request: TokenRequest, response) => {
+  async (request: TokenRequest, response) => {
     const query = request.query as Record<string, unknown>;
 
     const limit = Math.min(Number(query.limit ?? 50), 500);
@@ -99,7 +99,7 @@ router.get(
       typeof query.search === 'string' ? query.search.trim() : undefined;
     if (search) filters.search = search;
 
-    const { rows, total } = getWorldRepository().getAllPaginated(
+    const { rows, total } = await getWorldRepository().getAllPaginated(
       limit,
       offset,
       Object.keys(filters).length > 0 ? filters : undefined
@@ -145,16 +145,9 @@ router.get(
 router.get(
   '/api/worlds/pairs',
   requirePermission('worlds:read'),
-  (_request, response) => {
-    const pairs = getWorldRepository().getAllWorldGuildPairs();
-    const entries = Array.from(pairs).map((key) => {
-      const dashIndex = key.lastIndexOf('-');
-      return {
-        worldId: key.slice(0, dashIndex),
-        guildId: key.slice(dashIndex + 1)
-      };
-    });
-    response.send({ pairs: entries });
+  async (_request, response) => {
+    const pairs = await getWorldRepository().getAllWorldGuildPairs();
+    response.send({ pairs });
   }
 );
 
@@ -162,9 +155,9 @@ router.get(
 router.get(
   '/api/worlds/:worldId',
   requirePermission('worlds:read'),
-  (request: TokenRequest, response) => {
+  async (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
-    const matches = getWorldRepository().getByWorldId(worldId);
+    const matches = await getWorldRepository().getByWorldId(worldId);
 
     if (matches.length === 0) {
       return response.status(404).send({ error: 'World not found' });

@@ -1,5 +1,5 @@
 import { World } from 'vrchat';
-import { getDatabase } from '../db';
+import { getQueryable } from '../db/pool';
 import { getPackageSizesInMb } from '../worlds/packageSizes';
 import logger from '../logger';
 
@@ -24,16 +24,13 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
   const delayMs = Number(process.env.BACKFILL_DELAY_MS) || DEFAULT_DELAY_MS;
+  const db = getQueryable();
 
-  const db = getDatabase();
-
-  const total = (
-    db
-      .prepare(
-        `SELECT COUNT(*) as total FROM world_records WHERE vrchat_data IS NOT NULL AND vrchat_data != ''`
-      )
-      .get() as { total: number }
-  ).total;
+  const totalResult = await db.query<{ total: number }>(
+    `SELECT COUNT(*)::int AS total FROM world_records
+     WHERE vrchat_data IS NOT NULL AND vrchat_data != ''`
+  );
+  const total = totalResult.rows[0]?.total ?? 0;
   logger.info(`Backfilling package sizes for ${total} world records`);
 
   let offset = 0;
@@ -42,11 +39,14 @@ async function main() {
   let failed = 0;
 
   while (true) {
-    const rows = db
-      .prepare(
-        `SELECT id, vrchat_data FROM world_records WHERE vrchat_data IS NOT NULL AND vrchat_data != '' AND (package_sizes IS NULL OR package_sizes = '') ORDER BY id LIMIT ? OFFSET ?`
-      )
-      .all(BATCH_SIZE, offset) as Row[];
+    const rowsResult = await db.query<Row>(
+      `SELECT id, vrchat_data FROM world_records
+       WHERE vrchat_data IS NOT NULL AND vrchat_data != ''
+         AND cardinality(package_sizes) = 0
+       ORDER BY id LIMIT $1 OFFSET $2`,
+      [BATCH_SIZE, offset]
+    );
+    const rows = rowsResult.rows;
 
     if (rows.length === 0) break;
 
@@ -59,9 +59,10 @@ async function main() {
 
       const sizes = await getPackageSizesInMb(worldData);
       if (sizes.length > 0) {
-        db.prepare(
-          'UPDATE world_records SET package_sizes = ? WHERE id = ?'
-        ).run(JSON.stringify(sizes), row.id);
+        await db.query(
+          `UPDATE world_records SET package_sizes = $1 WHERE id = $2`,
+          [sizes, row.id]
+        );
         updated++;
       } else {
         failed++;

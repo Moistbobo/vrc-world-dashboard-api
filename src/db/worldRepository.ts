@@ -1,5 +1,6 @@
-import type Database from 'better-sqlite3';
-import { getDatabase } from './index';
+import type { Queryable } from './client';
+import { getQueryable } from './pool';
+import { toNumber, toNumberOrNull, toArray } from './mappers';
 import logger from '../logger';
 
 export interface WorldRecord {
@@ -23,48 +24,55 @@ export interface WorldRecord {
   internalAddDate?: number | null;
 }
 
-function rowToRecord(row: Record<string, unknown>): WorldRecord {
-  const record: WorldRecord = {
-    id: row.id as number,
-    worldId: row.world_id as string,
-    guildId: row.guild_id as string,
-    messageId: row.message_id as string,
-    name: row.name as string | null,
-    authorName: row.author_name as string | null,
-    capacity: row.capacity as number | null,
-    platforms: safeJsonParse(row.platforms as string | null, []),
-    tags: safeJsonParse(row.tags as string | null, []),
-    imageUrl: row.image_url as string | null,
-    sourceContent: row.source_content as string | null,
-    vrchatData: row.vrchat_data as string | null,
-    packageSizes: safeJsonParse(row.package_sizes as string | null, []) as (
-      number | null
-    )[],
-    quality: (row.quality as 'good' | 'bad' | null) ?? null,
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-    internalAddDate: (row.internal_add_date as number | null) ?? null
-  };
-  if (row.high_priority !== undefined) {
-    record.highPriority = Boolean(row.high_priority);
-  }
-  return record;
+interface WorldRow extends Record<string, unknown> {
+  id: bigint | number;
+  world_id: string;
+  guild_id: string;
+  message_id: string;
+  name: string | null;
+  author_name: string | null;
+  capacity: number | null;
+  platforms: string[] | null;
+  tags: string[] | null;
+  image_url: string | null;
+  source_content: string | null;
+  vrchat_data: string | null;
+  package_sizes: (number | null)[] | null;
+  quality: 'good' | 'bad' | null;
+  created_at: bigint | number;
+  updated_at: bigint | number;
+  internal_add_date: bigint | number | null;
+  high_priority: boolean | null;
 }
 
-function safeJsonParse<T>(value: string | null, fallback: T): T {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
+function rowToRecord(row: WorldRow): WorldRecord {
+  return {
+    id: toNumber(row.id),
+    worldId: row.world_id,
+    guildId: row.guild_id,
+    messageId: row.message_id,
+    name: row.name,
+    authorName: row.author_name,
+    capacity: toNumberOrNull(row.capacity),
+    platforms: toArray<string>(row.platforms),
+    tags: toArray<string>(row.tags),
+    imageUrl: row.image_url,
+    sourceContent: row.source_content,
+    vrchatData: row.vrchat_data,
+    packageSizes: toArray<number | null>(row.package_sizes),
+    quality: row.quality ?? null,
+    createdAt: toNumber(row.created_at),
+    updatedAt: toNumber(row.updated_at),
+    internalAddDate: toNumberOrNull(row.internal_add_date),
+    highPriority: row.high_priority === true
+  };
 }
 
 export class WorldRepository {
-  private db: Database.Database;
+  private db: Queryable;
 
-  constructor(db?: Database.Database) {
-    this.db = db ?? getDatabase();
+  constructor(db?: Queryable) {
+    this.db = db ?? getQueryable();
   }
 
   /**
@@ -73,44 +81,43 @@ export class WorldRepository {
    * internal_add_date is missing on both insert and the existing row, the
    * current time is used as a fallback.
    */
-  upsert(record: WorldRecord): void {
+  async upsert(record: WorldRecord): Promise<void> {
     const sql = `
       INSERT INTO world_records
         (world_id, guild_id, message_id, name, author_name, capacity,
-         platforms, tags, image_url, source_content, vrchat_data, package_sizes, created_at, updated_at, internal_add_date)
+         platforms, tags, image_url, source_content, vrchat_data, package_sizes, created_at, internal_add_date)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, strftime('%s','now')), strftime('%s','now'), COALESCE(?, strftime('%s','now')))
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, COALESCE($13, (EXTRACT(EPOCH FROM NOW()))::bigint), $14)
       ON CONFLICT(world_id, guild_id) DO UPDATE SET
-        name = excluded.name,
-        author_name = excluded.author_name,
-        capacity = excluded.capacity,
-        platforms = excluded.platforms,
-        tags = excluded.tags,
-        image_url = excluded.image_url,
-        source_content = excluded.source_content,
-        vrchat_data = excluded.vrchat_data,
-        package_sizes = excluded.package_sizes,
-        updated_at = excluded.updated_at,
-        internal_add_date = COALESCE(world_records.internal_add_date, excluded.internal_add_date)
+        name = EXCLUDED.name,
+        author_name = EXCLUDED.author_name,
+        capacity = EXCLUDED.capacity,
+        platforms = EXCLUDED.platforms,
+        tags = EXCLUDED.tags,
+        image_url = EXCLUDED.image_url,
+        source_content = EXCLUDED.source_content,
+        vrchat_data = EXCLUDED.vrchat_data,
+        package_sizes = EXCLUDED.package_sizes,
+        updated_at = (EXTRACT(EPOCH FROM NOW()))::bigint,
+        internal_add_date = COALESCE(world_records.internal_add_date, EXCLUDED.internal_add_date)
     `;
 
-    const stmt = this.db.prepare(sql);
-    stmt.run(
+    await this.db.query(sql, [
       record.worldId,
       record.guildId,
       record.messageId,
       record.name,
       record.authorName,
       record.capacity,
-      JSON.stringify(record.platforms),
-      JSON.stringify(record.tags),
+      record.platforms,
+      record.tags,
       record.imageUrl,
       record.sourceContent,
       record.vrchatData,
-      JSON.stringify(record.packageSizes),
+      record.packageSizes,
       record.createdAt ?? null,
       record.internalAddDate ?? null
-    );
+    ]);
 
     logger.debug(
       `Upserted world record ${record.worldId} in guild ${record.guildId}`
@@ -122,24 +129,23 @@ export class WorldRepository {
    * Used by crawlHistory and the v1 -> v2 migration to backfill the original
    * Discord message timestamp without overwriting an already-known value.
    */
-  backfillInternalAddDate(
+  async backfillInternalAddDate(
     worldId: string,
     guildId: string,
     internalAddDate: number
-  ): boolean {
-    const existing = this.getByWorldAndGuild(worldId, guildId);
+  ): Promise<boolean> {
+    const existing = await this.getByWorldAndGuild(worldId, guildId);
     if (!existing || existing.internalAddDate != null) {
       return false;
     }
 
-    const sql = `
-      UPDATE world_records
-      SET internal_add_date = ?
-      WHERE world_id = ? AND guild_id = ?
-    `;
-    const stmt = this.db.prepare(sql);
-    const result = stmt.run(internalAddDate, worldId, guildId);
-    const didUpdate = result.changes > 0;
+    const result = await this.db.query(
+      `UPDATE world_records
+       SET internal_add_date = $1
+       WHERE world_id = $2 AND guild_id = $3`,
+      [internalAddDate, worldId, guildId]
+    );
+    const didUpdate = (result.rowCount ?? 0) > 0;
     if (didUpdate) {
       logger.info(
         `Backfilled internal_add_date for world ${worldId} in guild ${guildId}: ${internalAddDate}`
@@ -151,70 +157,67 @@ export class WorldRepository {
   /**
    * Get all guild-scoped records for a given world ID.
    */
-  getByWorldId(worldId: string): WorldRecord[] {
+  async getByWorldId(worldId: string): Promise<WorldRecord[]> {
     const sql = `
       SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
       FROM world_records wr
       LEFT JOIN high_priority_worlds hp
         ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
-      WHERE wr.world_id = ?
+      WHERE wr.world_id = $1
       ORDER BY wr.created_at DESC
     `;
-    const stmt = this.db.prepare(sql);
-    const rows = stmt.all(worldId) as Record<string, unknown>[];
-    return rows.map(rowToRecord);
+    const result = await this.db.query<WorldRow>(sql, [worldId]);
+    return result.rows.map(rowToRecord);
   }
 
   /**
    * Get a specific world record by world ID + guild ID.
    */
-  getByWorldAndGuild(
+  async getByWorldAndGuild(
     worldId: string,
     guildId: string
-  ): WorldRecord | undefined {
+  ): Promise<WorldRecord | undefined> {
     const sql = `
       SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
       FROM world_records wr
       LEFT JOIN high_priority_worlds hp
         ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
-      WHERE wr.world_id = ? AND wr.guild_id = ?
+      WHERE wr.world_id = $1 AND wr.guild_id = $2
       LIMIT 1
     `;
-    const stmt = this.db.prepare(sql);
-    const row = stmt.get(worldId, guildId) as
-      Record<string, unknown> | undefined;
-    return row ? rowToRecord(row) : undefined;
+    const result = await this.db.query<WorldRow>(sql, [worldId, guildId]);
+    return result.rows[0] ? rowToRecord(result.rows[0]) : undefined;
   }
 
   /**
    * Move a world record to the deleted_world_records archive table,
    * then remove it from the live table. Returns true if a row existed.
    */
-  deleteByWorldAndGuild(worldId: string, guildId: string): boolean {
+  async deleteByWorldAndGuild(
+    worldId: string,
+    guildId: string
+  ): Promise<boolean> {
     const archiveSql = `
       INSERT INTO deleted_world_records
-        (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, created_at, updated_at, internal_add_date)
-      SELECT world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, created_at, updated_at, internal_add_date
+        (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, internal_add_date, created_at, updated_at)
+      SELECT world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, internal_add_date, created_at, updated_at
       FROM world_records
-      WHERE world_id = ? AND guild_id = ?
+      WHERE world_id = $1 AND guild_id = $2
     `;
-    const deleteSql =
-      'DELETE FROM world_records WHERE world_id = ? AND guild_id = ?';
+    const deleteSql = `DELETE FROM world_records WHERE world_id = $1 AND guild_id = $2`;
 
-    const result = this.db.transaction(() => {
-      const archiveStmt = this.db.prepare(archiveSql);
-      archiveStmt.run(worldId, guildId);
-      const deleteStmt = this.db.prepare(deleteSql);
-      return deleteStmt.run(worldId, guildId);
-    })();
+    const didDelete = await this.db.withTransaction(async (tx) => {
+      await tx.query(archiveSql, [worldId, guildId]);
+      const result = await tx.query(deleteSql, [worldId, guildId]);
+      return (result.rowCount ?? 0) > 0;
+    });
 
-    const didArchive = result.changes > 0;
-    if (didArchive) {
+    if (didDelete) {
       logger.info(
         `Archived world record ${worldId} from guild ${guildId} into deleted_world_records`
       );
     }
-    return didArchive;
+    return didDelete;
   }
 
   /**
@@ -222,12 +225,12 @@ export class WorldRepository {
    * Preserves existing fields; only updates quality and updated_at.
    * Skips the UPDATE if the quality value is unchanged.
    */
-  updateQuality(
+  async updateQuality(
     worldId: string,
     guildId: string,
     quality: 'good' | 'bad' | null
-  ): boolean {
-    const existing = this.getByWorldAndGuild(worldId, guildId);
+  ): Promise<boolean> {
+    const existing = await this.getByWorldAndGuild(worldId, guildId);
     if (!existing) {
       return false;
     }
@@ -239,14 +242,13 @@ export class WorldRepository {
       return false;
     }
 
-    const sql = `
-      UPDATE world_records
-      SET quality = ?, updated_at = strftime('%s','now')
-      WHERE world_id = ? AND guild_id = ?
-    `;
-    const stmt = this.db.prepare(sql);
-    const result = stmt.run(quality, worldId, guildId);
-    const didUpdate = result.changes > 0;
+    const result = await this.db.query(
+      `UPDATE world_records
+       SET quality = $1, updated_at = (EXTRACT(EPOCH FROM NOW()))::bigint
+       WHERE world_id = $2 AND guild_id = $3`,
+      [quality, worldId, guildId]
+    );
+    const didUpdate = (result.rowCount ?? 0) > 0;
     if (didUpdate) {
       logger.info(
         `Set quality to "${quality}" for world ${worldId} in guild ${guildId}`
@@ -260,13 +262,13 @@ export class WorldRepository {
    * Preserves all other fields.
    * Skips the UPDATE if both tags and source_content are unchanged.
    */
-  updateTags(
+  async updateTags(
     worldId: string,
     guildId: string,
     tags: string[],
     sourceContent: string | null
-  ): boolean {
-    const existing = this.getByWorldAndGuild(worldId, guildId);
+  ): Promise<boolean> {
+    const existing = await this.getByWorldAndGuild(worldId, guildId);
     if (!existing) {
       return false;
     }
@@ -281,19 +283,13 @@ export class WorldRepository {
       return false;
     }
 
-    const sql = `
-      UPDATE world_records
-      SET tags = ?, source_content = ?, updated_at = strftime('%s','now')
-      WHERE world_id = ? AND guild_id = ?
-    `;
-    const stmt = this.db.prepare(sql);
-    const result = stmt.run(
-      JSON.stringify(tags),
-      sourceContent,
-      worldId,
-      guildId
+    const result = await this.db.query(
+      `UPDATE world_records
+       SET tags = $1, source_content = $2, updated_at = (EXTRACT(EPOCH FROM NOW()))::bigint
+       WHERE world_id = $3 AND guild_id = $4`,
+      [tags, sourceContent, worldId, guildId]
     );
-    const didUpdate = result.changes > 0;
+    const didUpdate = (result.rowCount ?? 0) > 0;
     if (didUpdate) {
       logger.info(
         `Updated tags for world ${worldId} in guild ${guildId}: [${tags.join(', ')}]`
@@ -306,8 +302,12 @@ export class WorldRepository {
    * Set tags on a specific world record without touching source_content.
    * Preserves all other fields. Skips the UPDATE when the tags are unchanged.
    */
-  updateTagsOnly(worldId: string, guildId: string, tags: string[]): boolean {
-    const existing = this.getByWorldAndGuild(worldId, guildId);
+  async updateTagsOnly(
+    worldId: string,
+    guildId: string,
+    tags: string[]
+  ): Promise<boolean> {
+    const existing = await this.getByWorldAndGuild(worldId, guildId);
     if (!existing) {
       return false;
     }
@@ -319,14 +319,13 @@ export class WorldRepository {
       return false;
     }
 
-    const sql = `
-      UPDATE world_records
-      SET tags = ?, updated_at = strftime('%s','now')
-      WHERE world_id = ? AND guild_id = ?
-    `;
-    const stmt = this.db.prepare(sql);
-    const result = stmt.run(JSON.stringify(tags), worldId, guildId);
-    const didUpdate = result.changes > 0;
+    const result = await this.db.query(
+      `UPDATE world_records
+       SET tags = $1, updated_at = (EXTRACT(EPOCH FROM NOW()))::bigint
+       WHERE world_id = $2 AND guild_id = $3`,
+      [tags, worldId, guildId]
+    );
+    const didUpdate = (result.rowCount ?? 0) > 0;
     if (didUpdate) {
       logger.info(
         `Updated tags for world ${worldId} in guild ${guildId}: [${tags.join(', ')}]`
@@ -338,18 +337,18 @@ export class WorldRepository {
   /**
    * Get all world_id-guild_id pairs for caching.
    */
-  getAllWorldGuildPairs(): Set<string> {
-    const sql = "SELECT world_id || '-' || guild_id as key FROM world_records";
-    const stmt = this.db.prepare(sql);
-    const rows = stmt.all() as { key: string }[];
-    return new Set(rows.map((r) => r.key));
+  async getAllWorldGuildPairs(): Promise<
+    { worldId: string; guildId: string }[]
+  > {
+    const result = await this.db.query<{ world_id: string; guild_id: string }>(
+      `SELECT world_id, guild_id FROM world_records`
+    );
+    return result.rows.map((r) => ({
+      worldId: r.world_id,
+      guildId: r.guild_id
+    }));
   }
 
-  /**
-   * Build a WHERE clause and parameter list from the given filters.
-   * Used by getAllPaginated so facet counts use the exact same filtering
-   * rules as the paginated world list.
-   */
   private buildWhereClause(filters?: {
     tags?: string[];
     platforms?: string[];
@@ -361,53 +360,50 @@ export class WorldRepository {
     worldIds?: string[];
     dayRange?: number;
     highPriorityOnly?: boolean;
-  }): { whereClause: string; params: (string | number)[] } {
+  }): { whereClause: string; params: (string | number | string[])[] } {
     const whereParts: string[] = [];
-    const params: (string | number)[] = [];
+    const params: (string | number | string[])[] = [];
 
     if (filters?.guildId) {
-      whereParts.push('wr.guild_id = ?');
+      whereParts.push(`wr.guild_id = $${params.length + 1}`);
       params.push(filters.guildId);
     }
 
     if (filters?.worldIds && filters.worldIds.length > 0) {
-      const placeholders = filters.worldIds.map(() => '?').join(', ');
+      const placeholders = filters.worldIds
+        .map(() => `$${(params.length += 1)}`)
+        .join(', ');
       whereParts.push(`wr.world_id IN (${placeholders})`);
       params.push(...filters.worldIds);
     }
 
     if (filters?.quality && filters.quality.length > 0) {
-      const placeholders = filters.quality.map(() => '?').join(', ');
+      const placeholders = filters.quality
+        .map(() => `$${(params.length += 1)}`)
+        .join(', ');
       whereParts.push(`wr.quality IN (${placeholders})`);
       params.push(...filters.quality);
     }
 
     if (filters?.tags && filters.tags.length > 0) {
-      for (const tag of filters.tags) {
-        whereParts.push(
-          'EXISTS (SELECT 1 FROM json_each(wr.tags) WHERE value = ?)'
-        );
-        params.push(tag);
-      }
+      params.push(filters.tags);
+      whereParts.push(`wr.tags @> $${params.length}::text[]`);
     }
 
     if (filters?.platforms && filters.platforms.length > 0) {
-      for (const platform of filters.platforms) {
-        whereParts.push(
-          'EXISTS (SELECT 1 FROM json_each(wr.platforms) WHERE value = ?)'
-        );
-        params.push(platform);
-      }
+      params.push(filters.platforms);
+      whereParts.push(`wr.platforms @> $${params.length}::text[]`);
     }
 
     if (filters?.search) {
       const terms = filters.search.trim().split(/\s+/).filter(Boolean);
       for (const term of terms) {
         const pattern = `%${term}%`;
+        params.push(pattern);
+        const p = params.length;
         whereParts.push(
-          `(wr.name LIKE ? OR wr.author_name LIKE ? OR wr.source_content LIKE ? OR wr.world_id LIKE ? OR EXISTS (SELECT 1 FROM json_each(wr.tags) WHERE value LIKE ?))`
+          `(wr.name ILIKE $${p} OR wr.author_name ILIKE $${p} OR wr.source_content ILIKE $${p} OR wr.world_id ILIKE $${p} OR EXISTS (SELECT 1 FROM unnest(wr.tags) t WHERE t ILIKE $${p}))`
         );
-        params.push(pattern, pattern, pattern, pattern, pattern);
       }
     }
 
@@ -419,18 +415,20 @@ export class WorldRepository {
     }
 
     if (filters?.minCapacity !== undefined) {
-      whereParts.push('wr.capacity >= ?');
       params.push(filters.minCapacity);
+      whereParts.push(`wr.capacity >= $${params.length}`);
     }
 
     if (filters?.maxCapacity !== undefined) {
-      whereParts.push('wr.capacity <= ?');
       params.push(filters.maxCapacity);
+      whereParts.push(`wr.capacity <= $${params.length}`);
     }
 
     if (filters?.dayRange !== undefined && filters.dayRange > 0) {
+      const cutoff = Math.floor(Date.now() / 1000) - filters.dayRange * 86400;
+      params.push(cutoff);
       whereParts.push(
-        `COALESCE(wr.internal_add_date, wr.created_at) >= CAST(strftime('%s', 'now', '-${filters.dayRange} days') AS INTEGER)`
+        `COALESCE(wr.internal_add_date, wr.created_at) >= $${params.length}`
       );
     }
 
@@ -452,7 +450,7 @@ export class WorldRepository {
    * @param offset  Rows to skip
    * @param filters Optional filters (tag array = AND logic, platforms array = AND logic, guildId, quality)
    */
-  getAllPaginated(
+  async getAllPaginated(
     limit: number,
     offset: number,
     filters?: {
@@ -467,13 +465,14 @@ export class WorldRepository {
       dayRange?: number;
       highPriorityOnly?: boolean;
     }
-  ): { rows: WorldRecord[]; total: number } {
+  ): Promise<{ rows: WorldRecord[]; total: number }> {
     const { whereClause, params } = this.buildWhereClause(filters);
 
-    const countSql = `SELECT COUNT(*) as total FROM world_records wr ${whereClause}`;
-    const countStmt = this.db.prepare(countSql);
-    const countRow = countStmt.get(...params) as { total: number } | undefined;
-    const total = countRow?.total ?? 0;
+    const countResult = await this.db.query<{ total: number }>(
+      `SELECT COUNT(*)::int as total FROM world_records wr ${whereClause}`,
+      params
+    );
+    const total = countResult.rows[0]?.total ?? 0;
 
     const selectSql = `
       SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
@@ -481,16 +480,18 @@ export class WorldRepository {
       LEFT JOIN high_priority_worlds hp
         ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
       ${whereClause}
-      ORDER BY wr.created_at DESC LIMIT ? OFFSET ?
+      ORDER BY wr.created_at DESC LIMIT $${
+        params.length + 1
+      } OFFSET $${params.length + 2}
     `;
-    const selectStmt = this.db.prepare(selectSql);
-    const rows = selectStmt.all(...params, limit, offset) as Record<
-      string,
-      unknown
-    >[];
+    const selectResult = await this.db.query<WorldRow>(selectSql, [
+      ...params,
+      limit,
+      offset
+    ]);
 
     return {
-      rows: rows.map(rowToRecord),
+      rows: selectResult.rows.map(rowToRecord),
       total
     };
   }
@@ -500,45 +501,47 @@ export class WorldRepository {
    * support across all world records. Desktop support is counted via the
    * `standalonewindows` platform value that VRChat uses for PC/Desktop worlds.
    */
-  getMetadataCounts(options?: { includeHighPriorityCount?: boolean }): {
+  async getMetadataCounts(options?: {
+    includeHighPriorityCount?: boolean;
+  }): Promise<{
     qualityGood: number;
     qualityBad: number;
     platformDesktop: number;
     platformAndroid: number;
     platformiOS: number;
     highPriorityCount?: number;
-  } {
+  }> {
     const qualitySql = `
       SELECT
-        (SELECT COUNT(*) FROM world_records WHERE quality = 'good') AS qualityGood,
-        (SELECT COUNT(*) FROM world_records WHERE quality = 'bad') AS qualityBad
+        (SELECT COUNT(*)::int FROM world_records WHERE quality = 'good') AS qualityGood,
+        (SELECT COUNT(*)::int FROM world_records WHERE quality = 'bad') AS qualityBad
         ${
           options?.includeHighPriorityCount === true
-            ? `, (SELECT COUNT(*) FROM high_priority_worlds) AS highPriorityCount`
+            ? `, (SELECT COUNT(*)::int FROM high_priority_worlds) AS highPriorityCount`
             : ''
         }
     `;
-    const qualityStmt = this.db.prepare(qualitySql);
-    const qualityRow = qualityStmt.get() as
-      | { qualityGood: number; qualityBad: number; highPriorityCount?: number }
-      | undefined;
+    const qualityResult = await this.db.query<{
+      qualityGood: number;
+      qualityBad: number;
+      highPriorityCount?: number;
+    }>(qualitySql);
 
-    const platformSql = `
-      SELECT value AS platform, COUNT(*) AS count
-      FROM world_records, json_each(platforms)
-      WHERE value IN ('standalonewindows', 'android', 'ios')
-      GROUP BY value
-    `;
-    const platformStmt = this.db.prepare(platformSql);
-    const platformRows = platformStmt.all() as {
+    const platformResult = await this.db.query<{
       platform: string;
       count: number;
-    }[];
+    }>(`
+      SELECT platform AS platform, COUNT(*)::int AS count
+      FROM world_records, unnest(platforms) AS platform
+      WHERE platform IN ('standalonewindows', 'android', 'ios')
+      GROUP BY platform
+    `);
 
     const platformCounts = new Map(
-      platformRows.map((r) => [r.platform, r.count])
+      platformResult.rows.map((r) => [r.platform, r.count])
     );
 
+    const qualityRow = qualityResult.rows[0];
     const counts: {
       qualityGood: number;
       qualityBad: number;
@@ -562,35 +565,34 @@ export class WorldRepository {
   /**
    * Get all unique tags across all world records, with occurrence counts.
    */
-  getUniqueTags(): { tag: string; count: number }[] {
-    const sql = `
-      SELECT value as tag, COUNT(*) as count
-      FROM world_records, json_each(tags)
-      GROUP BY value
+  async getUniqueTags(): Promise<{ tag: string; count: number }[]> {
+    const result = await this.db.query<{ tag: string; count: number }>(`
+      SELECT tag AS tag, COUNT(*)::int AS count
+      FROM world_records, unnest(tags) AS tag
+      GROUP BY tag
       ORDER BY count DESC
-    `;
-    const stmt = this.db.prepare(sql);
-    return stmt.all() as { tag: string; count: number }[];
+    `);
+    return result.rows;
   }
 
   /**
    * Total number of world records.
    */
-  count(): number {
-    const sql = 'SELECT COUNT(*) as total FROM world_records';
-    const stmt = this.db.prepare(sql);
-    const row = stmt.get() as { total: number } | undefined;
-    return row?.total ?? 0;
+  async count(): Promise<number> {
+    const result = await this.db.query<{ total: number }>(
+      `SELECT COUNT(*)::int as total FROM world_records`
+    );
+    return result.rows[0]?.total ?? 0;
   }
 
   /**
    * The most recently processed world record.
    */
-  getLastProcessed(): WorldRecord | undefined {
-    const sql = 'SELECT * FROM world_records ORDER BY created_at DESC LIMIT 1';
-    const stmt = this.db.prepare(sql);
-    const row = stmt.get() as Record<string, unknown> | undefined;
-    return row ? rowToRecord(row) : undefined;
+  async getLastProcessed(): Promise<WorldRecord | undefined> {
+    const result = await this.db.query<WorldRow>(
+      `SELECT * FROM world_records ORDER BY created_at DESC LIMIT 1`
+    );
+    return result.rows[0] ? rowToRecord(result.rows[0]) : undefined;
   }
 }
 
