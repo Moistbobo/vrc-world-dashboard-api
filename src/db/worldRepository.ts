@@ -370,16 +370,18 @@ export class WorldRepository {
     }
 
     if (filters?.worldIds && filters.worldIds.length > 0) {
+      const start = params.length;
       const placeholders = filters.worldIds
-        .map(() => `$${(params.length += 1)}`)
+        .map((_, i) => `$${start + i + 1}`)
         .join(', ');
       whereParts.push(`wr.world_id IN (${placeholders})`);
       params.push(...filters.worldIds);
     }
 
     if (filters?.quality && filters.quality.length > 0) {
+      const start = params.length;
       const placeholders = filters.quality
-        .map(() => `$${(params.length += 1)}`)
+        .map((_, i) => `$${start + i + 1}`)
         .join(', ');
       whereParts.push(`wr.quality IN (${placeholders})`);
       params.push(...filters.quality);
