@@ -7,6 +7,7 @@ import {
 } from './pipeline';
 import { searchWorldsByName } from '../vrchat/client';
 import getTweetContent from './vxtwitter';
+import { extractWorldAndAuthorWithLLM } from './llmExtractor';
 
 jest.mock('../config', () => ({
   __esModule: true,
@@ -38,8 +39,16 @@ jest.mock('./vxtwitter', () => ({
   default: jest.fn()
 }));
 
+jest.mock('./llmExtractor', () => ({
+  extractWorldAndAuthorWithLLM: jest
+    .fn()
+    .mockResolvedValue({ worldName: null, authorName: null })
+}));
+
 const searchWorldsByNameMock = searchWorldsByName as jest.Mock;
 const getTweetContentMock = getTweetContent as jest.Mock;
+const extractWorldAndAuthorWithLLMMock =
+  extractWorldAndAuthorWithLLM as jest.Mock;
 
 const WRLD = 'wrld_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const WRLD_2 = 'wrld_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeef';
@@ -206,6 +215,10 @@ describe('parseWorldInfoFromPlainText', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     getTweetContentMock.mockResolvedValue(null);
+    extractWorldAndAuthorWithLLMMock.mockResolvedValue({
+      worldName: null,
+      authorName: null
+    });
   });
 
   it('searches by world name and author when both are present', async () => {
@@ -223,6 +236,37 @@ describe('parseWorldInfoFromPlainText', () => {
   });
 
   it('returns null when no world name is extractable', async () => {
+    const result = await parseWorldInfoFromPlainText(
+      'https://x.com/u/1',
+      'no world name here'
+    );
+
+    expect(result).toBeNull();
+    expect(searchWorldsByNameMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the LLM extractor when regex fails, and searches with its result', async () => {
+    extractWorldAndAuthorWithLLMMock.mockResolvedValue({
+      worldName: 'Cyber 2049',
+      authorName: 'Alice'
+    });
+    searchWorldsByNameMock.mockResolvedValue([
+      makeLimitedWorld('wrld_cyber', 'Cyber 2049', 'Alice'),
+      makeLimitedWorld('wrld_cyber2', 'Cyber 2049', 'Bob')
+    ]);
+
+    const result = await parseWorldInfoFromPlainText(
+      'https://x.com/u/1',
+      'no world name here'
+    );
+
+    expect(extractWorldAndAuthorWithLLMMock).toHaveBeenCalledWith(
+      'no world name here'
+    );
+    expect(result).toBe('wrld_cyber');
+  });
+
+  it('returns null when the LLM fallback also finds no world name', async () => {
     const result = await parseWorldInfoFromPlainText(
       'https://x.com/u/1',
       'no world name here'

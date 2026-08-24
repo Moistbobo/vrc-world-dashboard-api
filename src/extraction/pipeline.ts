@@ -12,6 +12,7 @@ import {
   isTwitterLink
 } from './regex';
 import logger from '../logger';
+import { extractWorldAndAuthorWithLLM } from './llmExtractor';
 
 export interface LimitedWorld {
   id: string;
@@ -135,11 +136,25 @@ export const parseWorldInfoFromPlainText = async (
 
   // Safeguard: do not search if only author name is available (world name required)
   if (!worldName) {
-    logger.warn(
-      'Could not extract world name from tweet content (author-only is not searchable):',
+    logger.info(
+      'Regex extraction failed, falling back to LLM extraction:',
       tweetContent?.substring(0, 200) + '...'
     );
-    return null;
+
+    const llmResult = await extractWorldAndAuthorWithLLM(tweetContent);
+    worldName = llmResult.worldName;
+    authorName = authorName ?? llmResult.authorName;
+
+    if (!worldName) {
+      logger.warn(
+        'Could not extract world name from tweet content (author-only is not searchable):',
+        tweetContent?.substring(0, 200) + '...'
+      );
+      return null;
+    }
+    logger.info(
+      `LLM extraction succeeded - World: "${worldName}", Author: "${authorName}"`
+    );
   }
 
   // World name only - search without author disambiguation
