@@ -1,5 +1,14 @@
 import { addWorld, WorldServiceError } from './service';
 
+const mockConfig = { DEV: false };
+
+jest.mock('../config', () => ({
+  __esModule: true,
+  get default() {
+    return mockConfig;
+  }
+}));
+
 jest.mock('../db/worldRepository', () => ({
   getWorldRepository: jest.fn()
 }));
@@ -124,6 +133,25 @@ describe('addWorld', () => {
     asMock(getPackageSizesInMb).mockResolvedValue([]);
 
     const result = await addWorld({ ...REQUEST, checkDuplicate: false });
+
+    expect(getByWorldAndGuild).not.toHaveBeenCalled();
+    expect(result.status).toBe('created');
+  });
+
+  it('skips the duplicate check when DEV is true', async () => {
+    mockConfig.DEV = true;
+    const getByWorldAndGuild = jest.fn(() => ({
+      messageId: '1240000000000000000'
+    }));
+    asMock(getWorldRepository).mockReturnValue({
+      getByWorldAndGuild,
+      upsert: jest.fn()
+    });
+    asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
+    asMock(extractTags).mockReturnValue([]);
+    asMock(getPackageSizesInMb).mockResolvedValue([]);
+
+    const result = await addWorld(REQUEST);
 
     expect(getByWorldAndGuild).not.toHaveBeenCalled();
     expect(result.status).toBe('created');
