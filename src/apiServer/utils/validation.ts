@@ -150,7 +150,6 @@ export function parseUpdateTagsEditBody(
   if (!isObject(body)) return null;
   if (!isNonEmptyString(body.guildId)) return null;
   if (!Array.isArray(body.tags)) return null;
-  if (body.tags.length > 20) return null;
   if (!body.tags.every((value) => typeof value === 'string')) return null;
   return { guildId: body.guildId, tags: body.tags as string[] };
 }
