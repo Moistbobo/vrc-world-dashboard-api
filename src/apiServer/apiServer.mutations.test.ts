@@ -584,15 +584,32 @@ describe('API mutations', () => {
       expect(response.status).toBe(400);
     });
 
-    it('returns 400 when tags has more than 20 entries', async () => {
+    it('accepts more than 20 tags', async () => {
       mockTokenRepo(tagsWritePermissions);
+      const manyTags = Array.from({ length: 21 }, (_, i) => `tag${i}`);
+      asMock(validateTags).mockReturnValue({
+        valid: manyTags,
+        invalid: []
+      });
+      const updateTagsOnly = jest.fn(() => true);
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getByWorldAndGuild: jest.fn(() => ({})),
+          updateTagsOnly
+        })
+      );
 
       const response = await request(app)
         .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
         .set(AUTH)
-        .send({ guildId: 'guild-1', tags: Array(21).fill('horror') });
+        .send({ guildId: 'guild-1', tags: manyTags });
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(200);
+      expect(updateTagsOnly).toHaveBeenCalledWith(
+        VALID_BODY.worldId,
+        'guild-1',
+        manyTags
+      );
     });
 
     it('returns 400 when tags contains a non-string entry', async () => {
