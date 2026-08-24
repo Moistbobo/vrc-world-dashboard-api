@@ -38,6 +38,7 @@ Fill in `.env` with:
 | `API_ALLOWED_ORIGINS` | Comma-separated allowed `Origin` values. Leave empty to allow any. |
 | `API_ALLOWED_IPS` | Comma-separated allowed source IPs. Leave empty to skip. |
 | `DISABLE_API_RESTRICTIONS` | Set `true` to bypass origin/IP allowlists (dev only). |
+| `LOG_IP_HASH_SECRET` | Optional HMAC key for hashing client IPs in logs. Random per process when unset. |
 | `DATABASE_PATH` | SQLite database path, defaults `./worlds.db`. Point this at the bot's database to share data. |
 
 API tokens are stored in the database and carry a role. Provision them with
