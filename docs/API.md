@@ -1,6 +1,6 @@
 # sos-world-tagger-api — API Guide
 
-The API exposes the world records stored in the shared SQLite database. It is
+The API exposes the world records stored in the Postgres database. It is
 intended for dashboards, CI tools, and the Discord bot itself. Read endpoints
 mirror the bot's original embedded API; mutation endpoints replace the bot's
 direct database writes.
@@ -28,7 +28,7 @@ All endpoints **except** `GET /api/health` require a valid Bearer token:
 Authorization: Bearer <your-api-token>
 ```
 
-Tokens are stored in the SQLite database and map to a role that carries a set
+Tokens are stored in the database and map to a role that carries a set
 of permissions.
 
 If the header is missing, malformed, or the token is unknown or revoked, the
