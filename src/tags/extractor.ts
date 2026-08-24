@@ -20,7 +20,18 @@ export const taxonomyTags: string[] = [
   'nature',
   'gamerip',
   'portal',
-  'liminal'
+  'liminal',
+  'moon',
+  'space',
+  'day',
+  'night',
+  'dawn',
+  'dusk',
+  'bar',
+  'club',
+  'beach',
+  'urban',
+  'aquatic'
 ];
 
 const TAXONOMY = new Set<string>(taxonomyTags);
