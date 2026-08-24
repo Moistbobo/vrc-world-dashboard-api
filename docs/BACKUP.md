@@ -1,55 +1,32 @@
 # Restore the database from a backup
 
-`worlds.db` is backed up on the production droplet. Restore it when the live database is corrupt or accidentally deleted.
+Postgres is backed up on the production droplet. Restore it when the live database is corrupt or accidentally deleted.
 
 ## Where backups live
 
-- Backups are written to `backups/` next to the database file, as `worlds-YYYY-MM-DD-HHmmss.db.gz`.
+- Backups are written to `backups/` next to the API, as `worlds-YYYY-MM-DD-HHmmss.dump` (pg_dump custom-format archives).
 - The daily cron entry at 02:00 runs `node dist/scripts/backup-db.js`.
 - Every production deploy also takes a snapshot right before the PM2 restart.
+- `DATABASE_URL` must be set for the backup to run.
 - Backups older than 14 days are pruned. `BACKUP_RETENTION_DAYS` and `BACKUP_DIR` override the defaults.
 
 ## Restore
 
-1. Stop the API so it releases the database file.
+1. List the snapshots and pick the one you want.
 
    ```
-   pm2 stop world-tagger-api
+   ls -lh backups/worlds-*.dump
    ```
 
-2. List the snapshots and pick the one you want.
+2. Restore the chosen snapshot into the database. `--clean` drops existing objects first. `--if-exists` keeps the drop idempotent, so an empty database also restores cleanly.
 
    ```
-   ls -lh backups/worlds-*.db.gz
-   ```
-
-3. Decompress the chosen snapshot into place.
-
-   ```
-   gunzip -k backups/worlds-YYYY-MM-DD-HHmmss.db.gz
-   ```
-
-4. Remove the WAL files from the current database so they do not replay over the restored one.
-
-   ```
-   rm -f worlds.db-wal worlds.db-shm
-   ```
-
-5. Replace the live database with the snapshot.
-
-   ```
-   mv worlds-YYYY-MM-DD-HHmmss.db worlds.db
-   ```
-
-6. Start the API.
-
-   ```
-   pm2 start ecosystem.config.js
+   pg_restore --clean --if-exists -d "$DATABASE_URL" backups/worlds-YYYY-MM-DD-HHmmss.dump
    ```
 
 ## Verify the restore
 
-Each snapshot is integrity-checked when it is created. After a restore, confirm the API serves data:
+Confirm the API serves data:
 
 ```
 curl http://127.0.0.1:3067/health
@@ -63,4 +40,4 @@ Run the backup on demand:
 pnpm backup:db
 ```
 
-The script uses the SQLite online backup API, so it is safe to run while the API is live.
+The script shells out to `pg_dump`, so it is safe to run while the API is live.

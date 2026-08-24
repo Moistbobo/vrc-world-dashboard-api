@@ -8,11 +8,11 @@ const router = Router();
 router.get(
   '/api/meta',
   requirePermission('meta:read'),
-  (request: TokenRequest, response) => {
+  async (request: TokenRequest, response) => {
     const canManage =
       request.token?.role.permissions.includes('worlds:write') ?? false;
     response.send(
-      getWorldRepository().getMetadataCounts({
+      await getWorldRepository().getMetadataCounts({
         includeHighPriorityCount: canManage
       })
     );

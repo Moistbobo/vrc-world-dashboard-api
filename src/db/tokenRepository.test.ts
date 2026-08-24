@@ -1,23 +1,19 @@
-import Database from 'better-sqlite3';
 import { runMigrations } from './schema';
+import { createTestDb, type TestDb } from './testUtils';
 import { RoleRepository } from './roleRepository';
 import { TokenRepository, hashToken } from './tokenRepository';
 
 describe('roles', () => {
-  let db: Database.Database;
+  let queryable: TestDb['queryable'];
 
-  beforeEach(() => {
-    db = new Database(':memory:');
-    runMigrations(db);
+  beforeEach(async () => {
+    ({ queryable } = createTestDb());
+    await runMigrations(queryable);
   });
 
-  afterEach(() => {
-    db.close();
-  });
-
-  test('seeds viewer, curator, admin roles', () => {
-    const repo = new RoleRepository(db);
-    const roles = repo.list();
+  test('seeds viewer, curator, admin roles', async () => {
+    const repo = new RoleRepository(queryable);
+    const roles = await repo.list();
     const names = roles.map((r) => r.name).sort();
     expect(names).toEqual(['admin', 'curator', 'viewer']);
     expect(roles.find((r) => r.name === 'viewer')?.permissions).toEqual([
@@ -33,32 +29,35 @@ describe('roles', () => {
     );
   });
 
-  test('create adds a role with the given permissions', () => {
-    const repo = new RoleRepository(db);
-    const role = repo.create('curator-v2', ['worlds:read', 'worlds:write']);
+  test('create adds a role with the given permissions', async () => {
+    const repo = new RoleRepository(queryable);
+    const role = await repo.create('curator-v2', [
+      'worlds:read',
+      'worlds:write'
+    ]);
     expect(role.permissions).toEqual(['worlds:read', 'worlds:write']);
-    expect(repo.findByName('curator-v2')).toMatchObject({
+    expect(await repo.findByName('curator-v2')).toMatchObject({
       name: 'curator-v2'
     });
   });
 
-  test('create rejects a duplicate name', () => {
-    const repo = new RoleRepository(db);
-    expect(() => repo.create('viewer', ['worlds:read'])).toThrow(
+  test('create rejects a duplicate name', async () => {
+    const repo = new RoleRepository(queryable);
+    await expect(repo.create('viewer', ['worlds:read'])).rejects.toThrow(
       'already exists'
     );
   });
 
-  test('create rejects unknown permissions', () => {
-    const repo = new RoleRepository(db);
-    expect(() =>
+  test('create rejects unknown permissions', async () => {
+    const repo = new RoleRepository(queryable);
+    await expect(
       repo.create('bogus', ['worlds:read', 'does:not-exist'] as never)
-    ).toThrow('Unknown permission');
+    ).rejects.toThrow('Unknown permission');
   });
 
-  test('updatePermissions adds and removes, ignoring no-ops', () => {
-    const repo = new RoleRepository(db);
-    const updated = repo.updatePermissions(
+  test('updatePermissions adds and removes, ignoring no-ops', async () => {
+    const repo = new RoleRepository(queryable);
+    const updated = await repo.updatePermissions(
       'viewer',
       ['worlds:write'],
       ['meta:read', 'meta:read']
@@ -68,96 +67,88 @@ describe('roles', () => {
       'tags:read',
       'worlds:write'
     ]);
-    expect(repo.findByName('viewer')?.permissions).toEqual(
+    expect((await repo.findByName('viewer'))?.permissions).toEqual(
       updated?.permissions
     );
   });
 
-  test('updatePermissions returns undefined for a missing role', () => {
-    const repo = new RoleRepository(db);
-    expect(repo.updatePermissions('nope', [], [])).toBeUndefined();
+  test('updatePermissions returns undefined for a missing role', async () => {
+    const repo = new RoleRepository(queryable);
+    expect(await repo.updatePermissions('nope', [], [])).toBeUndefined();
   });
 });
 
 describe('api tokens', () => {
-  let db: Database.Database;
+  let queryable: TestDb['queryable'];
   let roles: RoleRepository;
 
-  beforeEach(() => {
-    db = new Database(':memory:');
-    runMigrations(db);
-    roles = new RoleRepository(db);
+  beforeEach(async () => {
+    ({ queryable } = createTestDb());
+    await runMigrations(queryable);
+    roles = new RoleRepository(queryable);
   });
 
-  afterEach(() => {
-    db.close();
-  });
-
-  test('create returns a raw token whose hash can look it up', () => {
-    const repo = new TokenRepository(db);
-    const viewer = roles.findByName('viewer')!;
-    const { rawToken, record } = repo.create('bot', viewer);
+  test('create returns a raw token whose hash can look it up', async () => {
+    const repo = new TokenRepository(queryable);
+    const viewer = (await roles.findByName('viewer'))!;
+    const { rawToken, record } = await repo.create('bot', viewer);
 
     expect(rawToken).toMatch(/^[0-9a-f]{64}$/);
     expect(record.name).toBe('bot');
     expect(record.roleId).toBe(viewer.id);
     expect(record.revokedAt).toBeNull();
 
-    const found = repo.findByHash(hashToken(rawToken));
+    const found = await repo.findByHash(hashToken(rawToken));
     expect(found).toMatchObject({ name: 'bot' });
     expect(found?.role.permissions).toEqual(viewer.permissions);
   });
 
-  test('create rejects a duplicate name', () => {
-    const repo = new TokenRepository(db);
-    const viewer = roles.findByName('viewer')!;
-    repo.create('bot', viewer);
-    expect(() => repo.create('bot', viewer)).toThrow('already exists');
+  test('create rejects a duplicate name', async () => {
+    const repo = new TokenRepository(queryable);
+    const viewer = (await roles.findByName('viewer'))!;
+    await repo.create('bot', viewer);
+    await expect(repo.create('bot', viewer)).rejects.toThrow('already exists');
   });
 
-  test('generateRawToken produces unique tokens', () => {
-    const repo = new TokenRepository(db);
-    const viewer = roles.findByName('viewer')!;
-    const a = repo.create('a', viewer).rawToken;
-    const b = repo.create('b', viewer).rawToken;
+  test('generateRawToken produces unique tokens', async () => {
+    const repo = new TokenRepository(queryable);
+    const viewer = (await roles.findByName('viewer'))!;
+    const a = (await repo.create('a', viewer)).rawToken;
+    const b = (await repo.create('b', viewer)).rawToken;
     expect(a).not.toBe(b);
   });
 
-  test('findByHash returns undefined for an unknown hash', () => {
-    const repo = new TokenRepository(db);
-    expect(repo.findByHash('0'.repeat(64))).toBeUndefined();
+  test('findByHash returns undefined for an unknown hash', async () => {
+    const repo = new TokenRepository(queryable);
+    expect(await repo.findByHash('0'.repeat(64))).toBeUndefined();
   });
 
-  test('revoke is idempotent and marks the token', () => {
-    const repo = new TokenRepository(db);
-    const viewer = roles.findByName('viewer')!;
-    const { record } = repo.create('bot', viewer);
-    expect(repo.revoke('bot')).toBe(true);
-    expect(repo.revoke('bot')).toBe(false);
-    expect(repo.findByName('bot')?.revokedAt).not.toBeNull();
+  test('revoke is idempotent and marks the token', async () => {
+    const repo = new TokenRepository(queryable);
+    const viewer = (await roles.findByName('viewer'))!;
+    const { record } = await repo.create('bot', viewer);
+    expect(await repo.revoke('bot')).toBe(true);
+    expect(await repo.revoke('bot')).toBe(false);
+    expect((await repo.findByName('bot'))?.revokedAt).not.toBeNull();
     expect(record.revokedAt).toBeNull();
   });
 
-  test('touchLastUsed updates the timestamp', () => {
-    const repo = new TokenRepository(db);
-    const viewer = roles.findByName('viewer')!;
-    const { record } = repo.create('bot', viewer);
+  test('touchLastUsed updates the timestamp', async () => {
+    const repo = new TokenRepository(queryable);
+    const viewer = (await roles.findByName('viewer'))!;
+    const { record } = await repo.create('bot', viewer);
     expect(record.lastUsedAt).toBeNull();
-    repo.touchLastUsed(record.id, 1234567890);
-    expect(repo.findByName('bot')?.lastUsedAt).toBe(1234567890);
+    await repo.touchLastUsed(record.id, 1234567890);
+    expect((await repo.findByName('bot'))?.lastUsedAt).toBe(1234567890);
   });
 
-  test('list returns tokens with their roles', () => {
-    const repo = new TokenRepository(db);
-    const viewer = roles.findByName('viewer')!;
-    repo.create('bot', viewer);
-    repo.create('dash', viewer);
-    expect(
-      repo
-        .list()
-        .map((t) => t.name)
-        .sort()
-    ).toEqual(['bot', 'dash']);
-    expect(repo.list()[0].role.name).toBe('viewer');
+  test('list returns tokens with their roles', async () => {
+    const repo = new TokenRepository(queryable);
+    const viewer = (await roles.findByName('viewer'))!;
+    await repo.create('bot', viewer);
+    await repo.create('dash', viewer);
+    const tokens = await repo.list();
+    expect(tokens.map((t) => t.name).sort()).toEqual(['bot', 'dash']);
+    expect((await repo.list())[0].role.name).toBe('viewer');
   });
 });

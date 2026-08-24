@@ -1,5 +1,6 @@
-import type Database from 'better-sqlite3';
-import { getDatabase } from './index';
+import type { Queryable } from './client';
+import { getQueryable } from './pool';
+import { toNumber } from './mappers';
 import { parsePermissions, type Permission } from '../auth/permissions';
 import logger from '../logger';
 
@@ -10,49 +11,54 @@ export interface RoleRecord {
   createdAt: number;
 }
 
-function rowToRole(row: Record<string, unknown>): RoleRecord {
+interface RoleRow extends Record<string, unknown> {
+  id: bigint | number;
+  name: string;
+  permissions: string[];
+  created_at: bigint | number;
+}
+
+function rowToRole(row: RoleRow): RoleRecord {
   return {
-    id: row.id as number,
-    name: row.name as string,
-    permissions: parsePermissions(JSON.parse(row.permissions as string)),
-    createdAt: row.created_at as number
+    id: toNumber(row.id),
+    name: row.name,
+    permissions: parsePermissions(row.permissions),
+    createdAt: toNumber(row.created_at)
   };
 }
 
 export class RoleRepository {
-  private db: Database.Database;
+  private db: Queryable;
 
-  constructor(db?: Database.Database) {
-    this.db = db ?? getDatabase();
+  constructor(db?: Queryable) {
+    this.db = db ?? getQueryable();
   }
 
-  create(name: string, permissions: Permission[]): RoleRecord {
-    const exists = this.findByName(name);
+  async create(name: string, permissions: Permission[]): Promise<RoleRecord> {
+    const exists = await this.findByName(name);
     if (exists) {
       throw new Error(`Role "${name}" already exists`);
     }
 
     const validated = parsePermissions(permissions);
-    const sql = 'INSERT INTO roles (name, permissions) VALUES (?, ?)';
-    const stmt = this.db.prepare(sql);
-    const result = stmt.run(name, JSON.stringify(validated));
+    const result = await this.db.query<RoleRow>(
+      `INSERT INTO roles (name, permissions) VALUES ($1, $2::text[])
+       RETURNING id, name, permissions, created_at`,
+      [name, validated]
+    );
+    const created = rowToRole(result.rows[0]);
     logger.info(
       `Created role "${name}" with permissions [${validated.join(', ')}]`
     );
-    return {
-      id: Number(result.lastInsertRowid),
-      name,
-      permissions: validated,
-      createdAt: Math.floor(Date.now() / 1000)
-    };
+    return created;
   }
 
-  updatePermissions(
+  async updatePermissions(
     name: string,
     add: Permission[],
     remove: Permission[]
-  ): RoleRecord | undefined {
-    const role = this.findByName(name);
+  ): Promise<RoleRecord | undefined> {
+    const role = await this.findByName(name);
     if (!role) return undefined;
 
     const validatedAdd = parsePermissions(add);
@@ -62,34 +68,37 @@ export class RoleRepository {
     for (const permission of validatedRemove) existing.delete(permission);
     const permissions = [...existing];
 
-    const sql = 'UPDATE roles SET permissions = ? WHERE name = ?';
-    const stmt = this.db.prepare(sql);
-    stmt.run(JSON.stringify(permissions), name);
+    await this.db.query(
+      `UPDATE roles SET permissions = $1::text[] WHERE name = $2`,
+      [permissions, name]
+    );
     logger.info(
       `Updated role "${name}" permissions to [${permissions.join(', ')}]`
     );
     return { ...role, permissions };
   }
 
-  findByName(name: string): RoleRecord | undefined {
-    const sql = 'SELECT * FROM roles WHERE name = ? LIMIT 1';
-    const stmt = this.db.prepare(sql);
-    const row = stmt.get(name) as Record<string, unknown> | undefined;
-    return row ? rowToRole(row) : undefined;
+  async findByName(name: string): Promise<RoleRecord | undefined> {
+    const result = await this.db.query<RoleRow>(
+      `SELECT * FROM roles WHERE name = $1 LIMIT 1`,
+      [name]
+    );
+    return result.rows[0] ? rowToRole(result.rows[0]) : undefined;
   }
 
-  findById(id: number): RoleRecord | undefined {
-    const sql = 'SELECT * FROM roles WHERE id = ? LIMIT 1';
-    const stmt = this.db.prepare(sql);
-    const row = stmt.get(id) as Record<string, unknown> | undefined;
-    return row ? rowToRole(row) : undefined;
+  async findById(id: number): Promise<RoleRecord | undefined> {
+    const result = await this.db.query<RoleRow>(
+      `SELECT * FROM roles WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    return result.rows[0] ? rowToRole(result.rows[0]) : undefined;
   }
 
-  list(): RoleRecord[] {
-    const sql = 'SELECT * FROM roles ORDER BY name';
-    const stmt = this.db.prepare(sql);
-    const rows = stmt.all() as Record<string, unknown>[];
-    return rows.map(rowToRole);
+  async list(): Promise<RoleRecord[]> {
+    const result = await this.db.query<RoleRow>(
+      `SELECT * FROM roles ORDER BY name`
+    );
+    return result.rows.map(rowToRole);
   }
 }
 

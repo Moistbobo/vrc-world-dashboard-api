@@ -1,24 +1,26 @@
-import type Database from 'better-sqlite3';
-import { getDatabase } from './index';
+import type { Queryable } from './client';
+import { getQueryable } from './pool';
 import logger from '../logger';
 
 export class HighPriorityRepository {
-  private db: Database.Database;
+  private db: Queryable;
 
-  constructor(db?: Database.Database) {
-    this.db = db ?? getDatabase();
+  constructor(db?: Queryable) {
+    this.db = db ?? getQueryable();
   }
 
-  add(
+  async add(
     worldId: string,
     guildId: string,
     addedByTokenId?: number
-  ): { added: boolean } {
-    const sql =
-      'INSERT OR IGNORE INTO high_priority_worlds (world_id, guild_id, added_by_token_id) VALUES (?, ?, ?)';
-    const stmt = this.db.prepare(sql);
-    const result = stmt.run(worldId, guildId, addedByTokenId ?? null);
-    const added = result.changes > 0;
+  ): Promise<{ added: boolean }> {
+    const result = await this.db.query(
+      `INSERT INTO high_priority_worlds (world_id, guild_id, added_by_token_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (world_id, guild_id) DO NOTHING`,
+      [worldId, guildId, addedByTokenId ?? null]
+    );
+    const added = (result.rowCount ?? 0) > 0;
     if (added) {
       logger.info(
         `Marked world ${worldId} in guild ${guildId} as high priority`
@@ -27,12 +29,15 @@ export class HighPriorityRepository {
     return { added };
   }
 
-  remove(worldId: string, guildId: string): { removed: boolean } {
-    const sql =
-      'DELETE FROM high_priority_worlds WHERE world_id = ? AND guild_id = ?';
-    const stmt = this.db.prepare(sql);
-    const result = stmt.run(worldId, guildId);
-    const removed = result.changes > 0;
+  async remove(
+    worldId: string,
+    guildId: string
+  ): Promise<{ removed: boolean }> {
+    const result = await this.db.query(
+      `DELETE FROM high_priority_worlds WHERE world_id = $1 AND guild_id = $2`,
+      [worldId, guildId]
+    );
+    const removed = (result.rowCount ?? 0) > 0;
     if (removed) {
       logger.info(
         `Removed high priority flag for world ${worldId} in guild ${guildId}`

@@ -1,38 +1,64 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import zlib from 'zlib';
-import Database from 'better-sqlite3';
+import { execFile, type ChildProcess } from 'node:child_process';
 import { createBackup } from './backup-db';
+
+jest.mock('node:child_process', () => ({
+  execFile: jest.fn()
+}));
+
+const mockExecFile = jest.mocked(execFile);
+
+const DATABASE_URL = 'postgres://user:pass@localhost:5432/worlds';
 
 describe('createBackup', () => {
   const now = new Date(2026, 7, 15, 12, 0, 0);
   const dayMs = 24 * 60 * 60 * 1000;
   let tmpDir: string;
-  let dbPath: string;
 
   beforeAll(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-test-'));
-    dbPath = path.join(tmpDir, 'source.db');
-    const db = new Database(dbPath);
-    db.exec('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT NOT NULL)');
-    const insert = db.prepare('INSERT INTO items (name) VALUES (?)');
-    insert.run('alpha');
-    insert.run('beta');
-    insert.run('gamma');
-    db.close();
   });
 
   afterAll(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('writes a gzipped backup and prunes expired files', async () => {
-    const backupDir = path.join(tmpDir, 'backups');
+  beforeEach(() => {
+    mockExecFile.mockReset();
+    mockExecFile.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(null, '', '');
+      return {} as ChildProcess;
+    });
+  });
+
+  test('invokes pg_dump with a custom-format archive under the backup dir', async () => {
+    const backupDir = path.join(tmpDir, 'backups-1');
+
+    const result = await createBackup({
+      databaseUrl: DATABASE_URL,
+      backupDir,
+      retentionDays: 14,
+      now
+    });
+
+    const expectedFile = path.join(backupDir, 'worlds-2026-08-15-120000.dump');
+    expect(result).toEqual({ file: expectedFile, kept: 0, pruned: 0 });
+    expect(mockExecFile).toHaveBeenCalledWith(
+      'pg_dump',
+      [`--file=${expectedFile}`, '--format=custom', DATABASE_URL],
+      expect.objectContaining({ maxBuffer: expect.any(Number) }),
+      expect.any(Function)
+    );
+  });
+
+  test('prunes expired .dump backups and keeps fresh ones', async () => {
+    const backupDir = path.join(tmpDir, 'backups-2');
     fs.mkdirSync(backupDir, { recursive: true });
 
-    const oldFile = path.join(backupDir, 'worlds-2026-07-01-000000.db.gz');
-    const freshFile = path.join(backupDir, 'worlds-2026-08-10-000000.db.gz');
+    const oldFile = path.join(backupDir, 'worlds-2026-07-01-000000.dump');
+    const freshFile = path.join(backupDir, 'worlds-2026-08-10-000000.dump');
     const strayFile = path.join(backupDir, 'notes.txt');
     fs.writeFileSync(oldFile, 'stale');
     fs.writeFileSync(freshFile, 'recent');
@@ -43,65 +69,39 @@ describe('createBackup', () => {
     fs.utimesSync(freshFile, freshMtime, freshMtime);
 
     const result = await createBackup({
-      dbPath,
+      databaseUrl: DATABASE_URL,
       backupDir,
       retentionDays: 14,
       now
     });
 
     expect(result.file).toBe(
-      path.join(backupDir, 'worlds-2026-08-15-120000.db.gz')
+      path.join(backupDir, 'worlds-2026-08-15-120000.dump')
     );
-    expect(fs.existsSync(result.file)).toBe(true);
-    expect(fs.statSync(result.file).size).toBeGreaterThan(0);
-    expect(fs.existsSync(result.file.replace(/\.gz$/, ''))).toBe(false);
     expect(fs.existsSync(oldFile)).toBe(false);
     expect(fs.existsSync(freshFile)).toBe(true);
     expect(fs.existsSync(strayFile)).toBe(true);
     expect(result.pruned).toBe(1);
-    expect(result.kept).toBe(2);
-
-    const raw = zlib.gunzipSync(fs.readFileSync(result.file));
-    expect(raw.subarray(0, 16).toString('latin1')).toBe(
-      'SQLite format 3\u0000'
-    );
+    expect(result.kept).toBe(1);
   });
 
-  test('normalizes a WAL-mode snapshot to rollback mode without sidecars', async () => {
-    const walDir = path.join(tmpDir, 'wal');
-    fs.mkdirSync(walDir, { recursive: true });
-    const walDbPath = path.join(walDir, 'source.db');
-    const walDb = new Database(walDbPath);
-    walDb.pragma('journal_mode = WAL');
-    walDb.exec('CREATE TABLE items (id INTEGER PRIMARY KEY)');
-    walDb.prepare('INSERT INTO items (id) VALUES (?)').run(1);
-    walDb.close();
-
-    const result = await createBackup({
-      dbPath: walDbPath,
-      backupDir: path.join(tmpDir, 'wal-backups'),
-      retentionDays: 14,
-      now
+  test('surfaces pg_dump stderr when the dump fails', async () => {
+    mockExecFile.mockImplementation((_cmd, _args, _opts, cb) => {
+      cb(
+        new Error('exit code 1'),
+        '',
+        'pg_dump: error: connection to server at "localhost" failed'
+      );
+      return {} as ChildProcess;
     });
 
-    const entries = fs.readdirSync(path.dirname(result.file));
-    expect(
-      entries.some(
-        (name) => name.endsWith('.db-shm') || name.endsWith('.db-wal')
-      )
-    ).toBe(false);
-
-    const restoredPath = path.join(path.dirname(result.file), 'restored.db');
-    fs.writeFileSync(
-      restoredPath,
-      zlib.gunzipSync(fs.readFileSync(result.file))
-    );
-    const db = new Database(restoredPath);
-    expect(db.pragma('journal_mode', { simple: true })).toBe('delete');
-    expect(db.pragma('integrity_check', { simple: true })).toBe('ok');
-    expect(db.prepare('SELECT COUNT(*) AS c FROM items').get()).toEqual({
-      c: 1
-    });
-    db.close();
+    await expect(
+      createBackup({
+        databaseUrl: DATABASE_URL,
+        backupDir: path.join(tmpDir, 'backups-3'),
+        retentionDays: 14,
+        now
+      })
+    ).rejects.toThrow(/pg_dump failed: pg_dump: error:/);
   });
 });

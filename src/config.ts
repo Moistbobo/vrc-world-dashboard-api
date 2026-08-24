@@ -13,6 +13,10 @@ const Config = {
     ? process.env.AUTHOR_NAME_MATCHERS.split(',')
     : [],
   DATABASE_PATH: process.env.DATABASE_PATH || './worlds.db',
+  DATABASE_URL: process.env.DATABASE_URL || '',
+  LLM_EXTRACTOR_URL: process.env.LLM_EXTRACTOR_URL || '',
+  LLM_EXTRACTOR_TIMEOUT_MS:
+    Number(process.env.LLM_EXTRACTOR_TIMEOUT_MS) || 10000,
   API_PORT: Number(process.env.API_PORT) || 3000,
   API_HOST: process.env.API_HOST || '0.0.0.0',
   API_ALLOWED_ORIGINS: process.env.API_ALLOWED_ORIGINS
@@ -21,6 +25,7 @@ const Config = {
   API_ALLOWED_IPS: process.env.API_ALLOWED_IPS
     ? process.env.API_ALLOWED_IPS.split(',').map((ip) => ip.trim())
     : [],
+  DEV: process.env.DEV === 'true',
   DISABLE_API_RESTRICTIONS:
     process.env.DISABLE_API_RESTRICTIONS === 'true' ||
     process.env.DEV === 'true'

@@ -79,7 +79,7 @@ router.post(
 router.delete(
   '/api/worlds/:worldId',
   requirePermission('worlds:write'),
-  (request, response) => {
+  async (request, response) => {
     const { worldId } = request.params as { worldId: string };
     const body = parseGuildIdBody(request.body);
     if (!body) {
@@ -88,7 +88,7 @@ router.delete(
         .send({ error: 'Invalid body. Expected { guildId }' });
     }
 
-    const deleted = getWorldRepository().deleteByWorldAndGuild(
+    const deleted = await getWorldRepository().deleteByWorldAndGuild(
       worldId,
       body.guildId
     );
@@ -103,7 +103,7 @@ router.delete(
 router.put(
   '/api/worlds/:worldId/quality',
   requirePermission('worlds:write'),
-  (request, response) => {
+  async (request, response) => {
     const { worldId } = request.params as { worldId: string };
     const body = parseUpdateQualityBody(request.body);
     if (!body) {
@@ -113,12 +113,16 @@ router.put(
     }
 
     const repo = getWorldRepository();
-    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
 
-    const updated = repo.updateQuality(worldId, body.guildId, body.quality);
+    const updated = await repo.updateQuality(
+      worldId,
+      body.guildId,
+      body.quality
+    );
     response.send({ updated });
   }
 );
@@ -127,7 +131,7 @@ router.put(
 router.put(
   '/api/worlds/:worldId/tags',
   requirePermission('worlds:write'),
-  (request, response) => {
+  async (request, response) => {
     const { worldId } = request.params as { worldId: string };
     const body = parseUpdateTagsBody(request.body);
     if (!body) {
@@ -137,13 +141,13 @@ router.put(
     }
 
     const repo = getWorldRepository();
-    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
 
     const tags = extractTags(body.tagSource ?? body.sourceContent ?? '');
-    const updated = repo.updateTags(
+    const updated = await repo.updateTags(
       worldId,
       body.guildId,
       tags,
@@ -157,7 +161,7 @@ router.put(
 router.put(
   '/api/worlds/:worldId/tags/edit',
   requirePermission('tags:write'),
-  (request, response) => {
+  async (request, response) => {
     const { worldId } = request.params as { worldId: string };
     const body = parseUpdateTagsEditBody(request.body);
     if (!body) {
@@ -167,7 +171,7 @@ router.put(
     }
 
     const repo = getWorldRepository();
-    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
@@ -179,7 +183,7 @@ router.put(
       });
     }
 
-    const updated = repo.updateTagsOnly(worldId, body.guildId, valid);
+    const updated = await repo.updateTagsOnly(worldId, body.guildId, valid);
     response.send({ updated, tags: valid });
   }
 );
@@ -188,7 +192,7 @@ router.put(
 router.put(
   '/api/worlds/:worldId/high-priority',
   requirePermission('worlds:write'),
-  (request: TokenRequest, response) => {
+  async (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
     const body = parseGuildIdBody(request.body);
     if (!body) {
@@ -198,12 +202,12 @@ router.put(
     }
 
     const repo = getWorldRepository();
-    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
 
-    const { added } = getHighPriorityRepository().add(
+    const { added } = await getHighPriorityRepository().add(
       worldId,
       body.guildId,
       request.token?.id
@@ -216,7 +220,7 @@ router.put(
 router.delete(
   '/api/worlds/:worldId/high-priority',
   requirePermission('worlds:write'),
-  (request, response) => {
+  async (request, response) => {
     const { worldId } = request.params as { worldId: string };
     const body = parseGuildIdBody(request.body);
     if (!body) {
@@ -226,12 +230,12 @@ router.delete(
     }
 
     const repo = getWorldRepository();
-    const exists = repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
 
-    const { removed } = getHighPriorityRepository().remove(
+    const { removed } = await getHighPriorityRepository().remove(
       worldId,
       body.guildId
     );

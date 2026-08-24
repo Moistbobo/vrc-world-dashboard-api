@@ -50,14 +50,14 @@ function requireFlag(flags: Record<string, string>, name: string): string {
   return value;
 }
 
-function printUsage(command?: string): void {
+async function printUsage(command?: string): Promise<void> {
+  const roleNames = (await getRoleRepository().list())
+    .map((r) => r.name)
+    .join(', ');
   const sections: Record<string, string> = {
     'token:create': `Usage: pnpm token:create -- --name <name> --role <role>
   Create a token. The raw token is printed once and cannot be recovered later.
-  Roles: ${getRoleRepository()
-    .list()
-    .map((r) => r.name)
-    .join(', ')}`,
+  Roles: ${roleNames}`,
     'token:list': `Usage: pnpm token:list
   List tokens with role, created, last used, and revoked status.`,
     'token:revoke': `Usage: pnpm token:revoke -- --name <name>
@@ -89,25 +89,25 @@ ${PERMISSIONS_HELP}`
   }
 }
 
-function requireRole(name: string) {
-  const role = getRoleRepository().findByName(name);
+async function requireRole(name: string) {
+  const role = await getRoleRepository().findByName(name);
   if (!role) fail(`role "${name}" does not exist`);
   return role;
 }
 
-function cmdTokenCreate(args: string[]): void {
+async function cmdTokenCreate(args: string[]): Promise<void> {
   const flags = parseArgs(args);
   if (flags.help) return printUsage('token:create');
   const name = requireFlag(flags, 'name');
   const roleName = requireFlag(flags, 'role');
-  const role = requireRole(roleName);
-  const { rawToken, record } = getTokenRepository().create(name, role);
+  const role = await requireRole(roleName);
+  const { rawToken, record } = await getTokenRepository().create(name, role);
   console.log(`token "${record.name}" created with role "${role.name}"`);
   console.log(rawToken);
 }
 
-function cmdTokenList(): void {
-  const tokens = getTokenRepository().list();
+async function cmdTokenList(): Promise<void> {
+  const tokens = await getTokenRepository().list();
   if (tokens.length === 0) {
     console.log('no tokens');
     return;
@@ -120,19 +120,19 @@ function cmdTokenList(): void {
   }
 }
 
-function cmdTokenRevoke(args: string[]): void {
+async function cmdTokenRevoke(args: string[]): Promise<void> {
   const flags = parseArgs(args);
   if (flags.help) return printUsage('token:revoke');
   const name = requireFlag(flags, 'name');
-  if (getTokenRepository().revoke(name)) {
+  if (await getTokenRepository().revoke(name)) {
     console.log(`token "${name}" revoked`);
   } else {
     fail(`token "${name}" not found or already revoked`);
   }
 }
 
-function cmdRoleList(): void {
-  const roles = getRoleRepository().list();
+async function cmdRoleList(): Promise<void> {
+  const roles = await getRoleRepository().list();
   if (roles.length === 0) {
     console.log('no roles');
     return;
@@ -142,18 +142,18 @@ function cmdRoleList(): void {
   }
 }
 
-function cmdRoleCreate(args: string[]): void {
+async function cmdRoleCreate(args: string[]): Promise<void> {
   const flags = parseArgs(args);
   if (flags.help) return printUsage('role:create');
   const name = requireFlag(flags, 'name');
   const perms = parsePermissions(splitList(flags.perms));
-  const role = getRoleRepository().create(name, perms);
+  const role = await getRoleRepository().create(name, perms);
   console.log(
     `role "${role.name}" created with [${role.permissions.join(', ')}]`
   );
 }
 
-function cmdRoleUpdate(args: string[]): void {
+async function cmdRoleUpdate(args: string[]): Promise<void> {
   const flags = parseArgs(args);
   if (flags.help) return printUsage('role:update');
   const name = requireFlag(flags, 'name');
@@ -162,37 +162,44 @@ function cmdRoleUpdate(args: string[]): void {
   if (add.length === 0 && remove.length === 0) {
     fail('provide at least one of --add or --remove');
   }
-  const role = getRoleRepository().updatePermissions(name, add, remove);
+  const role = await getRoleRepository().updatePermissions(name, add, remove);
   if (!role) fail(`role "${name}" does not exist`);
   console.log(
     `role "${name}" permissions now [${role.permissions.join(', ')}]`
   );
 }
 
-const [command, ...rest] = process.argv.slice(2);
-switch (command) {
-  case 'token:create':
-    cmdTokenCreate(rest);
-    break;
-  case 'token:list':
-    cmdTokenList();
-    break;
-  case 'token:revoke':
-    cmdTokenRevoke(rest);
-    break;
-  case 'role:list':
-    cmdRoleList();
-    break;
-  case 'role:create':
-    cmdRoleCreate(rest);
-    break;
-  case 'role:update':
-    cmdRoleUpdate(rest);
-    break;
-  case 'help':
-  case undefined:
-    printUsage();
-    break;
-  default:
-    fail(`unknown command "${command}". Run "pnpm token-cli" for usage.`);
+async function main(): Promise<void> {
+  const [command, ...rest] = process.argv.slice(2);
+  switch (command) {
+    case 'token:create':
+      await cmdTokenCreate(rest);
+      break;
+    case 'token:list':
+      await cmdTokenList();
+      break;
+    case 'token:revoke':
+      await cmdTokenRevoke(rest);
+      break;
+    case 'role:list':
+      await cmdRoleList();
+      break;
+    case 'role:create':
+      await cmdRoleCreate(rest);
+      break;
+    case 'role:update':
+      await cmdRoleUpdate(rest);
+      break;
+    case 'help':
+    case undefined:
+      await printUsage();
+      break;
+    default:
+      fail(`unknown command "${command}". Run "pnpm token-cli" for usage.`);
+  }
 }
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

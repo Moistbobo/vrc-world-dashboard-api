@@ -14,14 +14,15 @@ export interface TokenRequest extends Request {
 
 const TOUCH_INTERVAL_SECONDS = 60;
 
-export function authMiddleware(
+export async function authMiddleware(
   request: TokenRequest,
   response: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   if (request.path === '/api/health') {
     logger.debug(`Auth: public endpoint, no token required`);
-    return next();
+    next();
+    return;
   }
 
   const auth = request.headers.authorization;
@@ -34,7 +35,7 @@ export function authMiddleware(
   }
 
   const token = auth.slice(7).trim();
-  const record = getTokenRepository().findByHash(hashToken(token));
+  const record = await getTokenRepository().findByHash(hashToken(token));
   if (!record || record.revokedAt !== null) {
     logger.warn(
       `Auth: rejected token (${record ? 'revoked' : 'unknown'}) for ${request.method} ${request.originalUrl} from ${hashIp(request.ip)}`
@@ -53,7 +54,7 @@ export function authMiddleware(
     record.lastUsedAt === null ||
     now - record.lastUsedAt > TOUCH_INTERVAL_SECONDS
   ) {
-    getTokenRepository().touchLastUsed(record.id, now);
+    void getTokenRepository().touchLastUsed(record.id, now);
     record.lastUsedAt = now;
   }
 
