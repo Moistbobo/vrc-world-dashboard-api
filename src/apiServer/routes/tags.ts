@@ -8,8 +8,8 @@ const router = Router();
 router.get(
   '/api/tags',
   requirePermission('tags:read'),
-  (_request, response) => {
-    const uniqueTags = getWorldRepository().getUniqueTags();
+  async (_request, response) => {
+    const uniqueTags = await getWorldRepository().getUniqueTags();
     const counts = new Map(uniqueTags.map(({ tag, count }) => [tag, count]));
     for (const tag of taxonomyTags) {
       if (!counts.has(tag)) {

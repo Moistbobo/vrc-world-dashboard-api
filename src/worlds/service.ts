@@ -7,6 +7,7 @@ import {
   getSupportedPlatforms
 } from './helpers';
 import { getWorldRepository, type WorldRecord } from '../db/worldRepository';
+import Config from '../config';
 
 export interface AddWorldRequest {
   worldId: string;
@@ -70,13 +71,13 @@ function buildWorldRecord(
 
 export async function addWorld(req: AddWorldRequest): Promise<AddWorldResult> {
   const repo = getWorldRepository();
-  const checkDuplicate = req.checkDuplicate ?? true;
+  const checkDuplicate = Config.DEV ? false : (req.checkDuplicate ?? true);
 
   if (checkDuplicate) {
-    const existing = repo.getByWorldAndGuild(req.worldId, req.guildId);
+    const existing = await repo.getByWorldAndGuild(req.worldId, req.guildId);
     if (existing) {
       if (req.messageTimestamp !== undefined) {
-        repo.backfillInternalAddDate(
+        await repo.backfillInternalAddDate(
           req.worldId,
           req.guildId,
           req.messageTimestamp
@@ -112,7 +113,7 @@ export async function addWorld(req: AddWorldRequest): Promise<AddWorldResult> {
     packageSizes,
     req.messageTimestamp
   );
-  repo.upsert(record);
+  await repo.upsert(record);
 
   return { status: 'created', world: record };
 }

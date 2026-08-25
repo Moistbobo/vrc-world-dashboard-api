@@ -2,8 +2,8 @@
 
 Standalone REST API for the VRChat world tagging system. This is the API
 refactor of the `bot_vrc_world_tagger` project: the bot hosts the Discord bot,
-this project hosts the Express API that reads and writes the shared SQLite
-world database.
+this project hosts the Express API that reads and writes the shared world
+database.
 
 The API keeps the existing read endpoints (`/api/worlds`, `/api/tags`,
 `/api/meta`, `/api/health`) and adds mutation endpoints so the bot can add,
@@ -19,7 +19,7 @@ API on add. The API then:
    "already tagged" link.
 2. Fetches the world's data from the VRChat API.
 3. Extracts tags from the message content using the shared taxonomy.
-4. Upserts the record into SQLite.
+4. Upserts the record into Postgres.
 
 ## Setup
 
@@ -39,7 +39,8 @@ Fill in `.env` with:
 | `API_ALLOWED_IPS` | Comma-separated allowed source IPs. Leave empty to skip. |
 | `DISABLE_API_RESTRICTIONS` | Set `true` to bypass origin/IP allowlists (dev only). |
 | `LOG_IP_HASH_SECRET` | Optional HMAC key for hashing client IPs in logs. Random per process when unset. |
-| `DATABASE_PATH` | SQLite database path, defaults `./worlds.db`. Point this at the bot's database to share data. |
+| `DATABASE_URL` | Postgres connection string, e.g. `postgres://user:pass@127.0.0.1:5432/sos_world_tagger`. Required at runtime. |
+| `DATABASE_PATH` | Legacy SQLite file used only by the one-time `pnpm load-from-sqlite` migration script. Defaults `./worlds.db`. |
 
 API tokens are stored in the database and carry a role. Provision them with
 `pnpm token:create -- --name <name> --role <role>` (roles: `viewer`, `curator`,

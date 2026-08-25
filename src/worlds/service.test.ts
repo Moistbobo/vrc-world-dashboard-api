@@ -1,5 +1,10 @@
 import { addWorld, WorldServiceError } from './service';
 
+jest.mock('../config', () => ({
+  __esModule: true,
+  default: { DEV: false }
+}));
+
 jest.mock('../db/worldRepository', () => ({
   getWorldRepository: jest.fn()
 }));
