@@ -27,7 +27,10 @@ const MIGRATION_NAMES = [
   '006_create_roles_and_api_tokens',
   '007_add_package_sizes_column',
   '008_create_high_priority_worlds',
-  '009_grant_tags_write_to_curator_and_admin'
+  '009_grant_tags_write_to_curator_and_admin',
+  '010_create_tags',
+  '011_create_world_tags',
+  '012_migrate_world_tags'
 ];
 
 interface SqliteRoleRow {
@@ -259,9 +262,9 @@ export async function loadWorldRecords(
     const result = await db.query(
       `INSERT INTO world_records
          (id, world_id, guild_id, message_id, name, author_name, capacity,
-          platforms, tags, image_url, source_content, vrchat_data, package_sizes,
+          platforms, image_url, source_content, vrchat_data, package_sizes,
           quality, internal_add_date, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        ON CONFLICT DO NOTHING`,
       [
         row.id,
@@ -272,7 +275,6 @@ export async function loadWorldRecords(
         row.author_name,
         row.capacity,
         parseStringArray(row.platforms),
-        parseStringArray(row.tags),
         row.image_url,
         row.source_content,
         row.vrchat_data,
@@ -284,6 +286,24 @@ export async function loadWorldRecords(
       ]
     );
     inserted += result.rowCount ?? 0;
+
+    // Tags live in the world_tags junction now. Ensure each tag exists in
+    // the catalog first (FK), then attach one junction row per tag.
+    const tags = parseStringArray(row.tags);
+    for (const tag of tags) {
+      await db.query(
+        `INSERT INTO tags (tag, emoji, hex_color)
+         VALUES ($1, '❓', '#94a3b8')
+         ON CONFLICT (tag) DO NOTHING`,
+        [tag]
+      );
+      await db.query(
+        `INSERT INTO world_tags (world_id, guild_id, tag)
+         VALUES ($1, $2, $3)
+         ON CONFLICT DO NOTHING`,
+        [row.world_id, row.guild_id, tag]
+      );
+    }
   }
 
   await syncSequence(db, 'world_records');
