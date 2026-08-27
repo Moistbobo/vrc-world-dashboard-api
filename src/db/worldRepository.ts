@@ -633,18 +633,18 @@ export class WorldRepository {
   }> {
     const qualitySql = `
       SELECT
-        (SELECT COUNT(*)::int FROM world_records WHERE quality = 'good') AS qualitygood,
-        (SELECT COUNT(*)::int FROM world_records WHERE quality = 'bad') AS qualitybad
+        (SELECT COUNT(*)::int FROM world_records WHERE quality = 'good') AS "qualityGood",
+        (SELECT COUNT(*)::int FROM world_records WHERE quality = 'bad') AS "qualityBad"
         ${
           options?.includeHighPriorityCount === true
-            ? `, (SELECT COUNT(*)::int FROM high_priority_worlds) AS highprioritycount`
+            ? `, (SELECT COUNT(*)::int FROM high_priority_worlds) AS "highPriorityCount"`
             : ''
         }
     `;
     const qualityResult = await this.db.query<{
-      qualitygood: number;
-      qualitybad: number;
-      highprioritycount?: number;
+      qualityGood: number;
+      qualityBad: number;
+      highPriorityCount?: number;
     }>(qualitySql);
 
     const platformResult = await this.db.query<{
@@ -662,7 +662,6 @@ export class WorldRepository {
     );
 
     const qualityRow = qualityResult.rows[0];
-    console.log(qualityRow);
     const counts: {
       qualityGood: number;
       qualityBad: number;
@@ -671,14 +670,14 @@ export class WorldRepository {
       platformiOS: number;
       highPriorityCount?: number;
     } = {
-      qualityGood: qualityRow?.qualitygood ?? 0,
-      qualityBad: qualityRow?.qualitybad ?? 0,
+      qualityGood: qualityRow?.qualityGood ?? 0,
+      qualityBad: qualityRow?.qualityBad ?? 0,
       platformDesktop: platformCounts.get('standalonewindows') ?? 0,
       platformAndroid: platformCounts.get('android') ?? 0,
       platformiOS: platformCounts.get('ios') ?? 0
     };
     if (options?.includeHighPriorityCount === true) {
-      counts.highPriorityCount = qualityRow?.highprioritycount ?? 0;
+      counts.highPriorityCount = qualityRow?.highPriorityCount ?? 0;
     }
     return counts;
   }
