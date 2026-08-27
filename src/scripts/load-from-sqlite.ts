@@ -1,5 +1,5 @@
 import path from 'path';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import Config from '../config';
 import logger from '../logger';
 import type { Queryable } from '../db/client';
@@ -7,7 +7,7 @@ import { getQueryable } from '../db/pool';
 import { runMigrations } from '../db/schema';
 
 /**
- * One-time migration from the legacy better-sqlite3 database into Postgres.
+ * One-time migration from the legacy SQLite database into Postgres.
  *
  * Load order is FK-safe: roles -> api_tokens -> world_records ->
  * deleted_world_records -> high_priority_worlds. Every insert preserves the
@@ -80,6 +80,16 @@ interface SqliteHighPriorityRow {
 
 const nowSec = (): number => Math.floor(Date.now() / 1000);
 
+/**
+ * The only surface the loaders need from the SQLite reader. Kept minimal so
+ * the loaders stay driver-agnostic; node:sqlite's DatabaseSync satisfies it
+ * structurally.
+ */
+interface SqliteSource {
+  prepare(sql: string): { all(): unknown[] };
+  close(): void;
+}
+
 /** JSON-text columns in SQLite become native pg arrays. */
 function parseStringArray(value: unknown): string[] {
   if (typeof value !== 'string' || value === '') {
@@ -120,9 +130,9 @@ async function syncSequence(db: Queryable, table: string): Promise<void> {
  * already exist by name, so they are skipped and their Postgres ids recorded.
  * Returns a map of role name -> Postgres role id for api_tokens resolution.
  */
-async function loadRoles(
+export async function loadRoles(
   db: Queryable,
-  source: Database.Database
+  source: SqliteSource
 ): Promise<Map<string, number>> {
   const rows = source
     .prepare(`SELECT id, name, permissions, created_at FROM roles ORDER BY id`)
@@ -176,9 +186,9 @@ async function loadRoles(
   return roleIdsByName;
 }
 
-async function loadApiTokens(
+export async function loadApiTokens(
   db: Queryable,
-  source: Database.Database,
+  source: SqliteSource,
   roleIdsByName: Map<string, number>,
   sourceRoleNameById: Map<number, string>
 ): Promise<void> {
@@ -229,9 +239,9 @@ async function loadApiTokens(
   );
 }
 
-async function loadWorldRecords(
+export async function loadWorldRecords(
   db: Queryable,
-  source: Database.Database
+  source: SqliteSource
 ): Promise<void> {
   const rows = source
     .prepare(
@@ -282,9 +292,9 @@ async function loadWorldRecords(
   );
 }
 
-async function loadDeletedWorldRecords(
+export async function loadDeletedWorldRecords(
   db: Queryable,
-  source: Database.Database
+  source: SqliteSource
 ): Promise<void> {
   const rows = source
     .prepare(
@@ -335,9 +345,9 @@ async function loadDeletedWorldRecords(
   );
 }
 
-async function loadHighPriorityWorlds(
+export async function loadHighPriorityWorlds(
   db: Queryable,
-  source: Database.Database
+  source: SqliteSource
 ): Promise<void> {
   const rows = source
     .prepare(
@@ -408,7 +418,7 @@ async function main(): Promise<void> {
   const dbPath = path.resolve(Config.DATABASE_PATH);
   logger.info(`Loading data from SQLite file ${dbPath} into Postgres`);
 
-  const source = new Database(dbPath, { readonly: true });
+  const source: SqliteSource = new DatabaseSync(dbPath, { readOnly: true });
   try {
     const db = getQueryable();
     await ensureSchema(db);
