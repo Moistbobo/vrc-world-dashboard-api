@@ -18,11 +18,6 @@ export function clearTaxonomy(): void {
   taxonomy = null;
 }
 
-/** The currently loaded canonical tag names, in arbitrary order. */
-export function getCanonicalTags(): string[] {
-  return taxonomy ? Array.from(taxonomy) : [];
-}
-
 /**
  * Maps variant spellings / synonyms to their canonical taxonomy form.
  */
