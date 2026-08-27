@@ -483,7 +483,8 @@ describe('API mutations', () => {
         VALID_BODY.worldId,
         'guild-1',
         ['horror', 'game'],
-        'per-world raw source'
+        'per-world raw source',
+        1
       );
       expect(response.body).toEqual({
         updated: true,
@@ -608,7 +609,8 @@ describe('API mutations', () => {
       expect(updateTagsOnly).toHaveBeenCalledWith(
         VALID_BODY.worldId,
         'guild-1',
-        manyTags
+        manyTags,
+        1
       );
     });
 
@@ -676,7 +678,8 @@ describe('API mutations', () => {
       expect(updateTagsOnly).toHaveBeenCalledWith(
         VALID_BODY.worldId,
         'guild-1',
-        ['horror', 'game']
+        ['horror', 'game'],
+        1
       );
       expect(response.body).toEqual({
         updated: true,

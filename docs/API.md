@@ -276,16 +276,19 @@ Status code: **404**
 GET /api/tags
 ```
 
-Returns every unique tag across all world records, sorted by frequency (most
-common first).
+Returns every tag in the canonical `tags` catalog plus every unique tag across
+all world records, sorted by frequency (most common first). Unused catalog
+tags are included with a count of `0`. Each entry carries the tag's emoji and
+hex color from the `tags` table, the single source of truth for tag metadata.
+In-data tags missing from the catalog fall back to `"❓"` and `"#94a3b8"`.
 
 **Response**
 
 ```json
 {
   "tags": [
-    { "tag": "social",  "count": 512 },
-    { "tag": "hangout", "count": 320 }
+    { "tag": "horror", "count": 312, "emoji": "👻", "hexColor": "#c084fc" },
+    { "tag": "chill", "count": 0, "emoji": "😎", "hexColor": "#06b6d4" }
   ]
 }
 ```
