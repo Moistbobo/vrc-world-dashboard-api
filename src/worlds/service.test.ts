@@ -1,34 +1,35 @@
+import type { MockedFunction } from 'vitest';
 import { addWorld, WorldServiceError } from './service';
 
-jest.mock('../config', () => ({
+vi.mock('../config', () => ({
   __esModule: true,
   default: { DEV: false }
 }));
 
-jest.mock('../db/worldRepository', () => ({
-  getWorldRepository: jest.fn()
+vi.mock('../db/worldRepository', () => ({
+  getWorldRepository: vi.fn()
 }));
 
-jest.mock('../vrchat/client', () => ({
-  fetchWorldData: jest.fn(),
-  ensureAuthenticated: jest.fn()
+vi.mock('../vrchat/client', () => ({
+  fetchWorldData: vi.fn(),
+  ensureAuthenticated: vi.fn()
 }));
 
-jest.mock('../tags/extractor', () => ({
-  extractTags: jest.fn()
+vi.mock('../tags/extractor', () => ({
+  extractTags: vi.fn()
 }));
 
-jest.mock('./packageSizes', () => ({
-  getPackageSizesInMb: jest.fn()
+vi.mock('./packageSizes', () => ({
+  getPackageSizesInMb: vi.fn()
 }));
 
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   __esModule: true,
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 
@@ -38,7 +39,7 @@ import { extractTags } from '../tags/extractor';
 import { getPackageSizesInMb } from './packageSizes';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
-  fn as jest.MockedFunction<T>;
+  fn as MockedFunction<T>;
 
 const REQUEST = {
   worldId: 'wrld_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -60,12 +61,12 @@ const WORLD_DATA = {
 
 describe('addWorld', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('returns duplicate with existingMessageId when record exists', async () => {
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild: jest.fn(() => ({
+      getByWorldAndGuild: vi.fn(() => ({
         worldId: REQUEST.worldId,
         guildId: REQUEST.guildId,
         messageId: '1240000000000000000',
@@ -95,8 +96,8 @@ describe('addWorld', () => {
 
   it('fetches VRChat data, extracts tags, and upserts when new', async () => {
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild: jest.fn(() => undefined),
-      upsert: jest.fn()
+      getByWorldAndGuild: vi.fn(() => undefined),
+      upsert: vi.fn()
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
     asMock(extractTags).mockReturnValue(['horror', 'game']);
@@ -117,12 +118,12 @@ describe('addWorld', () => {
   });
 
   it('skips the duplicate check when checkDuplicate is false', async () => {
-    const getByWorldAndGuild = jest.fn(() => ({
+    const getByWorldAndGuild = vi.fn(() => ({
       messageId: '1240000000000000000'
     }));
     asMock(getWorldRepository).mockReturnValue({
       getByWorldAndGuild,
-      upsert: jest.fn()
+      upsert: vi.fn()
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
     asMock(extractTags).mockReturnValue([]);
@@ -136,8 +137,8 @@ describe('addWorld', () => {
 
   it('uses the provided messageTimestamp for internalAddDate', async () => {
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild: jest.fn(() => undefined),
-      upsert: jest.fn()
+      getByWorldAndGuild: vi.fn(() => undefined),
+      upsert: vi.fn()
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
     asMock(extractTags).mockReturnValue([]);
@@ -153,8 +154,8 @@ describe('addWorld', () => {
 
   it('throws WorldServiceError with 502 when VRChat fetch fails', async () => {
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild: jest.fn(() => undefined),
-      upsert: jest.fn()
+      getByWorldAndGuild: vi.fn(() => undefined),
+      upsert: vi.fn()
     });
     asMock(fetchWorldData).mockRejectedValue(new Error('VRC API down'));
 

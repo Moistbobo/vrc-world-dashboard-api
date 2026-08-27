@@ -1,7 +1,8 @@
+import type { MockedFunction } from 'vitest';
 import { Express } from 'express';
 import request from 'supertest';
 
-jest.mock('../config', () => ({
+vi.mock('../config', () => ({
   __esModule: true,
   default: {
     API_PORT: 3000,
@@ -12,35 +13,35 @@ jest.mock('../config', () => ({
   }
 }));
 
-jest.mock('../db/worldRepository', () => ({
-  getWorldRepository: jest.fn()
+vi.mock('../db/worldRepository', () => ({
+  getWorldRepository: vi.fn()
 }));
 
-jest.mock('../db/tagRepository', () => ({
-  getTagRepository: jest.fn()
+vi.mock('../db/tagRepository', () => ({
+  getTagRepository: vi.fn()
 }));
 
-jest.mock('../db/tokenRepository', () => ({
+vi.mock('../db/tokenRepository', () => ({
   __esModule: true,
-  getTokenRepository: jest.fn(),
-  hashToken: jest.fn((token: string) => token)
+  getTokenRepository: vi.fn(),
+  hashToken: vi.fn((token: string) => token)
 }));
 
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   __esModule: true,
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 
-jest.mock('../vrchat/client', () => ({
-  fetchWorldData: jest.fn(),
-  searchWorldsByName: jest.fn(),
-  isCurrentUser: jest.fn(),
-  ensureAuthenticated: jest.fn(),
+vi.mock('../vrchat/client', () => ({
+  fetchWorldData: vi.fn(),
+  searchWorldsByName: vi.fn(),
+  isCurrentUser: vi.fn(),
+  ensureAuthenticated: vi.fn(),
   vrchat: { client: {} }
 }));
 
@@ -52,12 +53,12 @@ import { searchWorldsByName } from '../vrchat/client';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
-  fn as jest.MockedFunction<T>;
+  fn as MockedFunction<T>;
 
 function createMockRepo(overrides: Record<string, unknown> = {}) {
   return {
-    count: jest.fn(() => 1428),
-    getAllPaginated: jest.fn(() => ({
+    count: vi.fn(() => 1428),
+    getAllPaginated: vi.fn(() => ({
       total: 1,
       rows: [
         {
@@ -78,7 +79,7 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
         }
       ]
     })),
-    getByWorldId: jest.fn(() => [
+    getByWorldId: vi.fn(() => [
       {
         worldId: 'wrld_abc123',
         guildId: 'guild-1',
@@ -96,11 +97,11 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
         updatedAt: 1717257600
       }
     ]),
-    getUniqueTags: jest.fn(() => [
+    getUniqueTags: vi.fn(() => [
       { tag: 'horror', count: 312 },
       { tag: 'game', count: 145 }
     ]),
-    getMetadataCounts: jest.fn(() => ({
+    getMetadataCounts: vi.fn(() => ({
       qualityGood: 123,
       qualityBad: 12,
       platformDesktop: 80,
@@ -120,7 +121,7 @@ function createMockTokenRepo(
   ]
 ) {
   return {
-    findByHash: jest.fn(() => ({
+    findByHash: vi.fn(() => ({
       id: 1,
       tokenHash: 'test-token',
       name: 'test-token',
@@ -130,7 +131,7 @@ function createMockTokenRepo(
       lastUsedAt: null,
       revokedAt: null
     })),
-    touchLastUsed: jest.fn()
+    touchLastUsed: vi.fn()
   };
 }
 
@@ -143,7 +144,7 @@ describe('API Server', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('GET /api/health', () => {
@@ -171,8 +172,8 @@ describe('API Server', () => {
 
     it('returns 401 when token is invalid', async () => {
       asMock(getTokenRepository).mockReturnValue({
-        findByHash: jest.fn(() => undefined),
-        touchLastUsed: jest.fn()
+        findByHash: vi.fn(() => undefined),
+        touchLastUsed: vi.fn()
       });
 
       const response = await request(app)
@@ -185,7 +186,7 @@ describe('API Server', () => {
 
     it('returns 401 when token is revoked', async () => {
       asMock(getTokenRepository).mockReturnValue({
-        findByHash: jest.fn(() => ({
+        findByHash: vi.fn(() => ({
           id: 1,
           tokenHash: 'revoked-token',
           name: 'revoked',
@@ -200,7 +201,7 @@ describe('API Server', () => {
           lastUsedAt: null,
           revokedAt: 123
         })),
-        touchLastUsed: jest.fn()
+        touchLastUsed: vi.fn()
       });
 
       const response = await request(app)
@@ -278,7 +279,7 @@ describe('API Server', () => {
     });
 
     it('passes tag filters to repository', async () => {
-      const getAllPaginated = jest.fn(() => ({ total: 0, rows: [] }));
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({ getAllPaginated })
       );
@@ -295,7 +296,7 @@ describe('API Server', () => {
     });
 
     it('caps limit at 500', async () => {
-      const getAllPaginated = jest.fn(() => ({ total: 0, rows: [] }));
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({ getAllPaginated })
       );
@@ -330,7 +331,7 @@ describe('API Server', () => {
     });
 
     it('passes dayRange filter to repository', async () => {
-      const getAllPaginated = jest.fn(() => ({ total: 0, rows: [] }));
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({ getAllPaginated })
       );
@@ -368,7 +369,7 @@ describe('API Server', () => {
 
     it('returns 404 when world does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldId: jest.fn(() => []) })
+        createMockRepo({ getByWorldId: vi.fn(() => []) })
       );
 
       const response = await request(app)
@@ -442,7 +443,7 @@ describe('API Server', () => {
     it('returns used tags with counts, metadata, and unused canonical tags as zero', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
       asMock(getTagRepository).mockReturnValue({
-        getAll: jest.fn(async () => TAG_SEED)
+        getAll: vi.fn(async () => TAG_SEED)
       });
 
       const response = await request(app)
@@ -483,14 +484,14 @@ describe('API Server', () => {
     it('applies fallback metadata to in-data tags missing from the catalog', async () => {
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getUniqueTags: jest.fn(() => [
+          getUniqueTags: vi.fn(() => [
             { tag: 'horror', count: 312 },
             { tag: 'legacy-tag', count: 3 }
           ])
         })
       );
       asMock(getTagRepository).mockReturnValue({
-        getAll: jest.fn(async () => TAG_SEED)
+        getAll: vi.fn(async () => TAG_SEED)
       });
 
       const response = await request(app)
@@ -528,7 +529,7 @@ describe('API Server', () => {
     });
 
     it('includes the high priority count for curator tokens', async () => {
-      const getMetadataCounts = jest.fn(() => ({
+      const getMetadataCounts = vi.fn(() => ({
         qualityGood: 123,
         qualityBad: 12,
         platformDesktop: 80,
@@ -551,7 +552,7 @@ describe('API Server', () => {
     });
 
     it('omits the high priority count for viewer tokens', async () => {
-      const getMetadataCounts = jest.fn(() => ({
+      const getMetadataCounts = vi.fn(() => ({
         qualityGood: 123,
         qualityBad: 12,
         platformDesktop: 80,
@@ -589,7 +590,7 @@ describe('API Server', () => {
     it('sanitizes 500 errors from route handlers', async () => {
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getAllPaginated: jest.fn(() => {
+          getAllPaginated: vi.fn(() => {
             throw new Error('database exploded');
           })
         })

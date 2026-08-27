@@ -11,7 +11,7 @@ import {
 } from './regex';
 
 // Mock the config to avoid environment variable dependencies
-jest.mock('../config', () => {
+vi.mock('../config', () => {
   return {
     __esModule: true,
     default: {
@@ -42,13 +42,13 @@ jest.mock('../config', () => {
   };
 });
 
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   __esModule: true,
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 

@@ -1,7 +1,8 @@
+import type { MockedFunction } from 'vitest';
 import { Express } from 'express';
 import request from 'supertest';
 
-jest.mock('../config', () => ({
+vi.mock('../config', () => ({
   __esModule: true,
   default: {
     API_PORT: 3000,
@@ -12,35 +13,35 @@ jest.mock('../config', () => ({
   }
 }));
 
-jest.mock('../db/worldRepository', () => ({
-  getWorldRepository: jest.fn()
+vi.mock('../db/worldRepository', () => ({
+  getWorldRepository: vi.fn()
 }));
 
-jest.mock('../db/highPriorityRepository', () => ({
-  getHighPriorityRepository: jest.fn()
+vi.mock('../db/highPriorityRepository', () => ({
+  getHighPriorityRepository: vi.fn()
 }));
 
-jest.mock('../db/tokenRepository', () => ({
+vi.mock('../db/tokenRepository', () => ({
   __esModule: true,
-  getTokenRepository: jest.fn(),
-  hashToken: jest.fn((token: string) => token)
+  getTokenRepository: vi.fn(),
+  hashToken: vi.fn((token: string) => token)
 }));
 
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   __esModule: true,
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 
-jest.mock('../vrchat/client', () => ({
-  fetchWorldData: jest.fn(),
-  searchWorldsByName: jest.fn(),
-  isCurrentUser: jest.fn(),
-  ensureAuthenticated: jest.fn(),
+vi.mock('../vrchat/client', () => ({
+  fetchWorldData: vi.fn(),
+  searchWorldsByName: vi.fn(),
+  isCurrentUser: vi.fn(),
+  ensureAuthenticated: vi.fn(),
   vrchat: { client: {} }
 }));
 
@@ -50,7 +51,7 @@ import { getTokenRepository } from '../db/tokenRepository';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
-  fn as jest.MockedFunction<T>;
+  fn as MockedFunction<T>;
 
 const AUTH = { authorization: 'Bearer test-token' };
 
@@ -87,7 +88,7 @@ describe('High priority worlds API', () => {
     ]
   ) {
     asMock(getTokenRepository).mockReturnValue({
-      findByHash: jest.fn(() => ({
+      findByHash: vi.fn(() => ({
         id: 1,
         tokenHash: 'test-token',
         name: 'test-token',
@@ -97,23 +98,23 @@ describe('High priority worlds API', () => {
         lastUsedAt: null,
         revokedAt: null
       })),
-      touchLastUsed: jest.fn()
+      touchLastUsed: vi.fn()
     });
   }
 
   function mockWorldRepo(overrides: Record<string, unknown> = {}) {
     asMock(getWorldRepository).mockReturnValue({
-      getAllPaginated: jest.fn(() => ({ total: 1, rows: [WORLD_ROW] })),
-      getByWorldId: jest.fn(() => [WORLD_ROW]),
-      getByWorldAndGuild: jest.fn(() => WORLD_ROW),
+      getAllPaginated: vi.fn(() => ({ total: 1, rows: [WORLD_ROW] })),
+      getByWorldId: vi.fn(() => [WORLD_ROW]),
+      getByWorldAndGuild: vi.fn(() => WORLD_ROW),
       ...overrides
     });
   }
 
   function mockHpRepo(overrides: Record<string, unknown> = {}) {
     asMock(getHighPriorityRepository).mockReturnValue({
-      add: jest.fn(() => ({ added: true })),
-      remove: jest.fn(() => ({ removed: true })),
+      add: vi.fn(() => ({ added: true })),
+      remove: vi.fn(() => ({ removed: true })),
       ...overrides
     });
   }
@@ -126,7 +127,7 @@ describe('High priority worlds API', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('PUT /api/worlds/:worldId/high-priority', () => {
@@ -164,7 +165,7 @@ describe('High priority worlds API', () => {
     });
 
     it('returns 404 when the world does not exist', async () => {
-      mockWorldRepo({ getByWorldAndGuild: jest.fn(() => undefined) });
+      mockWorldRepo({ getByWorldAndGuild: vi.fn(() => undefined) });
 
       const response = await request(app)
         .put(`/api/worlds/${WORLD_ID}/high-priority`)
@@ -176,7 +177,7 @@ describe('High priority worlds API', () => {
     });
 
     it('returns 200 with added: true then added: false on repeat', async () => {
-      const add = jest
+      const add = vi
         .fn()
         .mockReturnValueOnce({ added: true })
         .mockReturnValueOnce({ added: false });
@@ -235,7 +236,7 @@ describe('High priority worlds API', () => {
     });
 
     it('returns 404 when the world does not exist', async () => {
-      mockWorldRepo({ getByWorldAndGuild: jest.fn(() => undefined) });
+      mockWorldRepo({ getByWorldAndGuild: vi.fn(() => undefined) });
 
       const response = await request(app)
         .delete(`/api/worlds/${WORLD_ID}/high-priority`)
@@ -247,7 +248,7 @@ describe('High priority worlds API', () => {
     });
 
     it('returns 200 with removed: true then removed: false on repeat', async () => {
-      const remove = jest
+      const remove = vi
         .fn()
         .mockReturnValueOnce({ removed: true })
         .mockReturnValueOnce({ removed: false });
@@ -398,7 +399,7 @@ describe('High priority worlds API', () => {
     });
 
     it('filters to high priority worlds for worlds:write tokens', async () => {
-      const getAllPaginated = jest.fn(() => ({ total: 1, rows: [WORLD_ROW] }));
+      const getAllPaginated = vi.fn(() => ({ total: 1, rows: [WORLD_ROW] }));
       asMock(getWorldRepository).mockReturnValue({ getAllPaginated });
 
       const response = await request(app)
