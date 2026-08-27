@@ -3,8 +3,9 @@
 Status: **implemented.** The arena-hardened plan below was executed on branch
 `migrate-to-postgres`. One deviation: `@>`/`unnest` facet queries are not
 unit-tested under pg-mem (it cannot run them); they are covered by the
-real-Postgres verification probe instead. `better-sqlite3` remains a
-devDependency for the one-time `pnpm load-from-sqlite` script.
+real-Postgres verification probe instead. The one-time `pnpm load-from-sqlite`
+script reads `worlds.db` via Node's built-in `node:sqlite`; `better-sqlite3`
+has been removed from the dependency list.
 
 ## Goals & scope
 
@@ -173,7 +174,8 @@ All 4 repos (`world`/`token`/`role`/`highPriority`) become async over `Queryable
 
 ## Phase 7 — one-time data-load (`src/scripts/load-from-sqlite.ts`)
 
-- Read `worlds.db` with better-sqlite3 (devDep), **read-only, API stopped**.
+- Read `worlds.db` with Node's built-in `node:sqlite` (`DatabaseSync`, read-only),
+  **API stopped**.
 - **Load in FK order**: `roles` → `api_tokens` → `world_records` →
   `deleted_world_records` → `high_priority_worlds` (composite FK to
   `world_records(world_id,guild_id)` and `added_by_token_id`→`api_tokens`). Each
@@ -194,7 +196,8 @@ All 4 repos (`world`/`token`/`role`/`highPriority`) become async over `Queryable
 - `DATABASE_PATH` → `DATABASE_URL` across `config.ts`, `.env.sample`, `README.md`,
   `docs/API.md`, `docs/BACKUP.md`, `backup-db.ts`. Confirm consumers: `index.ts` + load
   script. (Note: `ecosystem.config.js` does **not** reference the DB — no change.)
-- Remove `better-sqlite3` + `@types/better-sqlite3` once Phase 7 is merged.
+- `better-sqlite3` + `@types/better-sqlite3` removed; the load script reads
+  `worlds.db` through Node's built-in `node:sqlite` instead.
 - Postgres on droplet: bind `listen_addresses` / `pg_hba.conf` to `127.0.0.1`, strong
   password, not exposed publicly.
 
