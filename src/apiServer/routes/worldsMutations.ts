@@ -131,7 +131,7 @@ router.put(
 router.put(
   '/api/worlds/:worldId/tags',
   requirePermission('worlds:write'),
-  async (request, response) => {
+  async (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
     const body = parseUpdateTagsBody(request.body);
     if (!body) {
@@ -151,7 +151,8 @@ router.put(
       worldId,
       body.guildId,
       tags,
-      body.sourceContent
+      body.sourceContent,
+      request.token?.id
     );
     response.send({ updated, tags });
   }
@@ -161,7 +162,7 @@ router.put(
 router.put(
   '/api/worlds/:worldId/tags/edit',
   requirePermission('tags:write'),
-  async (request, response) => {
+  async (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
     const body = parseUpdateTagsEditBody(request.body);
     if (!body) {
@@ -183,7 +184,12 @@ router.put(
       });
     }
 
-    const updated = await repo.updateTagsOnly(worldId, body.guildId, valid);
+    const updated = await repo.updateTagsOnly(
+      worldId,
+      body.guildId,
+      valid,
+      request.token?.id
+    );
     response.send({ updated, tags: valid });
   }
 );

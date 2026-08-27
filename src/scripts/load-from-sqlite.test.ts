@@ -278,13 +278,12 @@ describe('load-from-sqlite', () => {
       name: string | null;
       capacity: number | null;
       platforms: string[];
-      tags: string[];
       package_sizes: number[];
       quality: string | null;
       internal_add_date: number | null;
       created_at: number | null;
     }>(
-      `SELECT world_id, guild_id, name, capacity, platforms, tags, package_sizes,
+      `SELECT world_id, guild_id, name, capacity, platforms, package_sizes,
               quality, internal_add_date, created_at
        FROM world_records ORDER BY world_id`
     );
@@ -296,7 +295,6 @@ describe('load-from-sqlite', () => {
       name: 'Alpha World',
       capacity: 16,
       platforms: ['standalonewindows', 'android'],
-      tags: ['horror', 'kino'],
       package_sizes: [104.5, 78.2],
       quality: 'good',
       internal_add_date: 1710000100,
@@ -308,11 +306,19 @@ describe('load-from-sqlite', () => {
       name: null,
       capacity: null,
       platforms: [],
-      tags: [],
       package_sizes: [],
       quality: null,
       internal_add_date: null
     });
+
+    const junction = await queryable.query<{
+      world_id: string;
+      tag: string;
+    }>(`SELECT world_id, tag FROM world_tags ORDER BY world_id, added_at, id`);
+    expect(junction.rows).toEqual([
+      { world_id: 'wrld_abc', tag: 'horror' },
+      { world_id: 'wrld_abc', tag: 'kino' }
+    ]);
   });
 
   test('loads deleted_world_records and high_priority_worlds', async () => {
@@ -361,6 +367,7 @@ describe('load-from-sqlite', () => {
       `SELECT 'roles' AS t, COUNT(*)::int AS n FROM roles
        UNION ALL SELECT 'api_tokens', COUNT(*)::int FROM api_tokens
        UNION ALL SELECT 'world_records', COUNT(*)::int FROM world_records
+       UNION ALL SELECT 'world_tags', COUNT(*)::int FROM world_tags
        UNION ALL SELECT 'deleted_world_records', COUNT(*)::int FROM deleted_world_records
        UNION ALL SELECT 'high_priority_worlds', COUNT(*)::int FROM high_priority_worlds`
     );
@@ -368,6 +375,7 @@ describe('load-from-sqlite', () => {
       { t: 'roles', n: 4 },
       { t: 'api_tokens', n: 3 },
       { t: 'world_records', n: 2 },
+      { t: 'world_tags', n: 2 },
       { t: 'deleted_world_records', n: 1 },
       { t: 'high_priority_worlds', n: 1 }
     ]);

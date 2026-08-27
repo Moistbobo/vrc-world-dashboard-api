@@ -1,40 +1,22 @@
 import logger from '../logger';
 
 /**
- * Canonical taxonomy tags for VRChat world categorization.
+ * Canonical taxonomy, loaded from the `tags` catalog table at boot.
+ * The set is empty until setTaxonomy() runs; validate() fails loudly rather
+ * than silently accepting nothing, so an unloaded taxonomy is a boot error,
+ * not a quiet data loss.
  */
-export const taxonomyTags: string[] = [
-  'kino',
-  'chill',
-  'comfy',
-  'adventure',
-  'horror',
-  'game',
-  'particle live / vrmv',
-  'gallery',
-  'meme',
-  'puzzle',
-  'driving',
-  'flying',
-  'tech',
-  'nature',
-  'gamerip',
-  'portal',
-  'liminal',
-  'moon',
-  'space',
-  'day',
-  'night',
-  'dawn',
-  'dusk',
-  'bar',
-  'club',
-  'beach',
-  'urban',
-  'aquatic'
-];
+let taxonomy: ReadonlySet<string> | null = null;
 
-const TAXONOMY = new Set<string>(taxonomyTags);
+/** Replace the loaded taxonomy set. Used by boot wiring and tests. */
+export function setTaxonomy(tags: Iterable<string>): void {
+  taxonomy = new Set(tags);
+}
+
+/** Clear the loaded taxonomy, forcing validate() to throw until reloaded. */
+export function clearTaxonomy(): void {
+  taxonomy = null;
+}
 
 /**
  * Maps variant spellings / synonyms to their canonical taxonomy form.
@@ -117,8 +99,13 @@ function canonicalize(token: string): string {
 
 /** Validate a token against the taxonomy. */
 function validate(token: string): string | null {
+  if (!taxonomy) {
+    throw new Error(
+      'Taxonomy not loaded. Call setTaxonomy() before extracting or validating tags.'
+    );
+  }
   const canonical = canonicalize(token);
-  if (TAXONOMY.has(canonical)) {
+  if (taxonomy.has(canonical)) {
     return canonical;
   }
   return null;

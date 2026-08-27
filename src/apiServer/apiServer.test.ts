@@ -16,6 +16,10 @@ jest.mock('../db/worldRepository', () => ({
   getWorldRepository: jest.fn()
 }));
 
+jest.mock('../db/tagRepository', () => ({
+  getTagRepository: jest.fn()
+}));
+
 jest.mock('../db/tokenRepository', () => ({
   __esModule: true,
   getTokenRepository: jest.fn(),
@@ -42,8 +46,9 @@ jest.mock('../vrchat/client', () => ({
 
 import { getWorldRepository } from '../db/worldRepository';
 import { getTokenRepository } from '../db/tokenRepository';
+import { getTagRepository } from '../db/tagRepository';
+import { TAG_SEED } from '../db/tagSeed';
 import { searchWorldsByName } from '../vrchat/client';
-import { taxonomyTags } from '../tags/extractor';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
@@ -434,8 +439,11 @@ describe('API Server', () => {
   });
 
   describe('GET /api/tags', () => {
-    it('returns used tags with counts and unused taxonomy tags as zero', async () => {
+    it('returns used tags with counts, metadata, and unused canonical tags as zero', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
+      asMock(getTagRepository).mockReturnValue({
+        getAll: jest.fn(async () => TAG_SEED)
+      });
 
       const response = await request(app)
         .get('/api/tags')
@@ -444,18 +452,24 @@ describe('API Server', () => {
       expect(response.status).toBe(200);
       const body = response.body;
 
-      // Tags present in the DB keep their real counts.
-      const byTag = new Map(
-        body.tags.map((t: { tag: string; count: number }) => [t.tag, t.count])
-      );
-      expect(byTag.get('horror')).toBe(312);
-      expect(byTag.get('game')).toBe(145);
-
-      // Every canonical taxonomy tag is returned, including unused ones at 0.
-      for (const tag of ['kino', 'chill', 'comfy']) {
-        expect(byTag.get(tag)).toBe(0);
+      const byTag = new Map<string, { tag: string; count: number }>();
+      for (const t of body.tags as { tag: string; count: number }[]) {
+        byTag.set(t.tag, t);
       }
-      expect(body.tags).toHaveLength(taxonomyTags.length);
+      expect(byTag.get('horror')?.count).toBe(312);
+      expect(byTag.get('game')?.count).toBe(145);
+
+      // Every canonical tag is returned, including unused ones at 0.
+      for (const tag of ['kino', 'chill', 'comfy']) {
+        expect(byTag.get(tag)?.count).toBe(0);
+      }
+      expect(body.tags).toHaveLength(TAG_SEED.length);
+
+      // Every entry carries the metadata sourced from the tags catalog.
+      for (const t of body.tags) {
+        expect(typeof t.emoji).toBe('string');
+        expect(typeof t.hexColor).toBe('string');
+      }
 
       // Sorted by count descending, ties resolved alphabetically.
       const counts = body.tags.map((t: { count: number }) => t.count);
@@ -464,6 +478,34 @@ describe('API Server', () => {
         .filter((t: { count: number }) => t.count === 0)
         .map((t: { tag: string }) => t.tag);
       expect(zeroTags).toEqual([...zeroTags].sort());
+    });
+
+    it('applies fallback metadata to in-data tags missing from the catalog', async () => {
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getUniqueTags: jest.fn(() => [
+            { tag: 'horror', count: 312 },
+            { tag: 'legacy-tag', count: 3 }
+          ])
+        })
+      );
+      asMock(getTagRepository).mockReturnValue({
+        getAll: jest.fn(async () => TAG_SEED)
+      });
+
+      const response = await request(app)
+        .get('/api/tags')
+        .set('authorization', 'Bearer test-token');
+
+      const legacy = response.body.tags.find(
+        (t: { tag: string }) => t.tag === 'legacy-tag'
+      );
+      expect(legacy).toEqual({
+        tag: 'legacy-tag',
+        count: 3,
+        emoji: '❓',
+        hexColor: '#94a3b8'
+      });
     });
   });
 

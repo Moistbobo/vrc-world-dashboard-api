@@ -3,6 +3,8 @@ import logger from './logger';
 import { createApiServer } from './apiServer';
 import { runMigrations } from './db/schema';
 import { getQueryable } from './db/pool';
+import { getTagRepository } from './db/tagRepository';
+import { setTaxonomy } from './tags/extractor';
 import { ensureAuthenticated } from './vrchat/client';
 
 async function main() {
@@ -10,6 +12,20 @@ async function main() {
     await runMigrations(getQueryable());
   } catch (error) {
     logger.error('Failed to run database migrations:', error);
+    process.exit(1);
+  }
+
+  try {
+    const canonicalTags = await getTagRepository().getAll();
+    if (canonicalTags.length === 0) {
+      throw new Error('tags table is empty after migrations');
+    }
+    setTaxonomy(canonicalTags.map((t) => t.tag));
+    logger.info(
+      `Loaded ${canonicalTags.length} canonical tags from the tags table`
+    );
+  } catch (error) {
+    logger.error('Failed to load canonical tags:', error);
     process.exit(1);
   }
 
