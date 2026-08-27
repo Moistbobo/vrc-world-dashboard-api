@@ -50,7 +50,7 @@ API tokens are stored in the database and carry a role. Provision them with
 
 ```bash
 pnpm start        # build and run
-pnpm test         # jest
+pnpm test         # vitest
 pnpm lint         # eslint (zero warnings allowed)
 pnpm format       # prettier
 ```
