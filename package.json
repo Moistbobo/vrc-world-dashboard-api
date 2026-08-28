@@ -4,7 +4,9 @@
   "packageManager": "pnpm@9.15.0",
   "main": "dist/index.js",
   "scripts": {
-    "start": "tsc && node dist/index.js",
+    "start": "node node_modules/typescript7/bin/tsc && node dist/index.js",
+    "build": "node node_modules/typescript7/bin/tsc",
+    "typecheck": "node node_modules/typescript7/bin/tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
