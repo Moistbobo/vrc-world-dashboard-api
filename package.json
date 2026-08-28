@@ -4,7 +4,9 @@
   "packageManager": "pnpm@9.15.0",
   "main": "dist/index.js",
   "scripts": {
-    "start": "tsc && node dist/index.js",
+    "start": "node node_modules/typescript7/bin/tsc && node dist/index.js",
+    "build": "node node_modules/typescript7/bin/tsc",
+    "typecheck": "node node_modules/typescript7/bin/tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
@@ -40,7 +42,8 @@
     "pg-mem": "^3.0.14",
     "prettier": "^3.6.2",
     "supertest": "^7.2.2",
-    "typescript": "^5.9.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript7": "npm:typescript@^7.0.2",
     "typescript-eslint": "^8.38.0",
     "vitest": "^3.2.4"
   },

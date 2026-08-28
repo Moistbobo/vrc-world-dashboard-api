@@ -12,7 +12,7 @@ export function getMostRecentUnityPackageForPlatform(
   data: World,
   platform: string
 ): UnityPackage | null {
-  const filteredPackages = data.unityPackages.filter(
+  const filteredPackages = (data.unityPackages ?? []).filter(
     (pkg) => pkg.platform === platform
   );
 
@@ -22,7 +22,8 @@ export function getMostRecentUnityPackageForPlatform(
 
   filteredPackages.sort(
     (a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      new Date(b.created_at ?? 0).getTime() -
+      new Date(a.created_at ?? 0).getTime()
   );
 
   return filteredPackages[0];
@@ -51,7 +52,7 @@ export function bytesToMegabytes(bytes: number): number {
 export async function getPackageSizesInMb(
   data: World
 ): Promise<(number | null)[]> {
-  const platforms = getSupportedPlatforms(data.unityPackages);
+  const platforms = getSupportedPlatforms(data.unityPackages ?? []);
 
   const sizes = await Promise.all(
     platforms.map(async (platform) => {
@@ -69,6 +70,8 @@ export async function getPackageSizesInMb(
           client: vrchat.client,
           path: { fileId: `file_${fileId}` }
         });
+
+        if (!file) return null;
 
         const mostRecentVersion = getRecentFileVersion(file.versions);
         if (!mostRecentVersion?.file?.sizeInBytes) return null;

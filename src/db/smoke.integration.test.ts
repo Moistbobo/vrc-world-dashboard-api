@@ -24,12 +24,12 @@ run('full smoke: tags catalog + world_tags junction', () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = url!;
 
-    const { createQueryable } = await import('./client');
-    const { runMigrations } = await import('./schema');
-    const { createApiServer } = await import('../apiServer');
-    const { RoleRepository } = await import('./roleRepository');
-    const { TokenRepository } = await import('./tokenRepository');
-    const { TagRepository } = await import('./tagRepository');
+    const { createQueryable } = await import('./client.js');
+    const { runMigrations } = await import('./schema.js');
+    const { createApiServer } = await import('../apiServer/index.js');
+    const { RoleRepository } = await import('./roleRepository.js');
+    const { TokenRepository } = await import('./tokenRepository.js');
+    const { TagRepository } = await import('./tagRepository.js');
 
     pool = new Pool({ connectionString: url! });
     const queryable = createQueryable(pool);
@@ -76,7 +76,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
 
     await runMigrations(queryable);
 
-    const { setTaxonomy } = await import('../tags/extractor');
+    const { setTaxonomy } = await import('../tags/extractor.js');
     const canonicalTags = await new TagRepository(queryable).getAll();
     setTaxonomy(canonicalTags.map((t) => t.tag));
 
@@ -97,14 +97,14 @@ run('full smoke: tags catalog + world_tags junction', () => {
   });
 
   afterAll(async () => {
-    const { closePool } = await import('./pool');
+    const { closePool } = await import('./pool.js');
     await closePool();
     await pool.end();
   });
 
   describe('migration 012 on real data', () => {
     it('backfills world_tags, seeds unknown tags with fallback metadata, drops the column', async () => {
-      const { createQueryable } = await import('./client');
+      const { createQueryable } = await import('./client.js');
       const queryable = createQueryable(pool);
 
       const junction = await queryable.query<{ world_id: string; tag: string }>(
@@ -139,8 +139,8 @@ run('full smoke: tags catalog + world_tags junction', () => {
 
   describe('repository layer on the migrated schema', () => {
     it('reads tags back in their original order', async () => {
-      const { createQueryable } = await import('./client');
-      const { WorldRepository } = await import('./worldRepository');
+      const { createQueryable } = await import('./client.js');
+      const { WorldRepository } = await import('./worldRepository.js');
       const repo = new WorldRepository(createQueryable(pool));
 
       const record = await repo.getByWorldAndGuild('wrld_horror', 'guild-1');
@@ -152,8 +152,8 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('upserts new worlds into the junction and replaces tags on update', async () => {
-      const { createQueryable } = await import('./client');
-      const { WorldRepository } = await import('./worldRepository');
+      const { createQueryable } = await import('./client.js');
+      const { WorldRepository } = await import('./worldRepository.js');
       const repo = new WorldRepository(createQueryable(pool));
 
       await repo.upsert({
@@ -194,9 +194,9 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('records the curator token on tag edits and preserves order', async () => {
-      const { createQueryable } = await import('./client');
-      const { WorldRepository } = await import('./worldRepository');
-      const { TokenRepository } = await import('./tokenRepository');
+      const { createQueryable } = await import('./client.js');
+      const { WorldRepository } = await import('./worldRepository.js');
+      const { TokenRepository } = await import('./tokenRepository.js');
       const repo = new WorldRepository(createQueryable(pool));
 
       const tokens = new TokenRepository(createQueryable(pool));
@@ -229,8 +229,8 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('rejects attaching a tag that is not in the catalog (FK enforcement)', async () => {
-      const { createQueryable } = await import('./client');
-      const { WorldRepository } = await import('./worldRepository');
+      const { createQueryable } = await import('./client.js');
+      const { WorldRepository } = await import('./worldRepository.js');
       const repo = new WorldRepository(createQueryable(pool));
 
       await expect(
@@ -252,8 +252,8 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('deletes a world, cascades the junction, and archives the tag snapshot', async () => {
-      const { createQueryable } = await import('./client');
-      const { WorldRepository } = await import('./worldRepository');
+      const { createQueryable } = await import('./client.js');
+      const { WorldRepository } = await import('./worldRepository.js');
       const repo = new WorldRepository(createQueryable(pool));
 
       const deleted = await repo.deleteByWorldAndGuild('wrld_empty', 'guild-1');
@@ -292,7 +292,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
       expect(byTag.get('kino')?.count).toBe(0);
 
       // Every canonical tag present, unused at 0.
-      const { TAG_SEED } = await import('./tagSeed');
+      const { TAG_SEED } = await import('./tagSeed.js');
       expect(response.body.tags).toHaveLength(TAG_SEED.length + 1);
       expect(byTag.get('aquatic')?.count).toBe(0);
       expect(byTag.get('aquatic')?.emoji).toBe('🐟');
@@ -356,7 +356,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
         tags: ['horror', 'chill']
       });
 
-      const { createQueryable } = await import('./client');
+      const { createQueryable } = await import('./client.js');
       const q = createQueryable(pool);
       const rows = await q.query<{
         tag: string;

@@ -54,7 +54,7 @@ jobs:
             git fetch origin production
             git reset --hard origin/production
             pnpm install
-            pnpm exec tsc
+            pnpm exec node node_modules/typescript7/bin/tsc
             node dist/scripts/backup-db.js || echo "WARN: deploy-time DB backup failed, continuing deploy"
             NODE_BIN="$(command -v node)"
             CRON_CMD="cd /home/world-tagger/release/sos-world-tagger-api && $NODE_BIN dist/scripts/backup-db.js >> backup-cron.log 2>&1"

@@ -2,10 +2,11 @@
   "exclude": ["dist", "eslint.config.mts", "vitest.config.ts", "vitest.setup.ts"],
   "compilerOptions": {
     "skipLibCheck": true,
-    "module": "commonjs",
+    "module": "nodenext",
     "esModuleInterop": true,
+    "strict": true,
     "target": "es6",
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
     "sourceMap": true,
     "outDir": "dist",
     "rootDir": "src",

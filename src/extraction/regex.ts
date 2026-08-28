@@ -370,17 +370,13 @@ export function extractWithCustomMatcher(
       return null;
     }
 
-    const customMatcherKeys = Object.keys(customMatchers);
-
-    for (const matcherKey of customMatcherKeys) {
+    for (const [matcherKey, matcher] of Object.entries(customMatchers)) {
       try {
         // Safe regex testing with error handling
         const regex = new RegExp(matcherKey, 'i');
         if (regex.test(twitterLink)) {
-          const worldName =
-            customMatchers[matcherKey].getWorldName(tweetContent);
-          const authorName =
-            customMatchers[matcherKey].getAuthorName(tweetContent);
+          const worldName = matcher.getWorldName(tweetContent);
+          const authorName = matcher.getAuthorName(tweetContent);
 
           if (worldName && authorName) {
             return { worldName, authorName };
