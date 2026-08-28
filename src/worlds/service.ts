@@ -56,7 +56,7 @@ function buildWorldRecord(
     name: worldData.name,
     authorName: worldData.authorName,
     capacity: worldData.capacity,
-    platforms: getSupportedPlatforms(worldData.unityPackages),
+    platforms: getSupportedPlatforms(worldData.unityPackages ?? []),
     tags: extractTags(content),
     imageUrl: worldData.imageUrl,
     sourceContent: content,

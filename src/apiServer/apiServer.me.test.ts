@@ -1,7 +1,8 @@
+import type { MockedFunction } from 'vitest';
 import { Express } from 'express';
 import request from 'supertest';
 
-jest.mock('../config', () => ({
+vi.mock('../config', () => ({
   __esModule: true,
   default: {
     API_PORT: 3000,
@@ -12,31 +13,31 @@ jest.mock('../config', () => ({
   }
 }));
 
-jest.mock('../db/worldRepository', () => ({
-  getWorldRepository: jest.fn()
+vi.mock('../db/worldRepository', () => ({
+  getWorldRepository: vi.fn()
 }));
 
-jest.mock('../db/tokenRepository', () => ({
+vi.mock('../db/tokenRepository', () => ({
   __esModule: true,
-  getTokenRepository: jest.fn(),
-  hashToken: jest.fn((token: string) => token)
+  getTokenRepository: vi.fn(),
+  hashToken: vi.fn((token: string) => token)
 }));
 
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   __esModule: true,
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 
-jest.mock('../vrchat/client', () => ({
-  fetchWorldData: jest.fn(),
-  searchWorldsByName: jest.fn(),
-  isCurrentUser: jest.fn(),
-  ensureAuthenticated: jest.fn(),
+vi.mock('../vrchat/client', () => ({
+  fetchWorldData: vi.fn(),
+  searchWorldsByName: vi.fn(),
+  isCurrentUser: vi.fn(),
+  ensureAuthenticated: vi.fn(),
   vrchat: { client: {} }
 }));
 
@@ -44,7 +45,7 @@ import { getTokenRepository } from '../db/tokenRepository';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
-  fn as jest.MockedFunction<T>;
+  fn as MockedFunction<T>;
 
 const AUTH = { authorization: 'Bearer test-token' };
 
@@ -53,7 +54,7 @@ describe('GET /api/me', () => {
 
   beforeEach(() => {
     asMock(getTokenRepository).mockReturnValue({
-      findByHash: jest.fn(() => ({
+      findByHash: vi.fn(() => ({
         id: 1,
         tokenHash: 'test-token',
         name: 'test-token',
@@ -73,13 +74,13 @@ describe('GET /api/me', () => {
         lastUsedAt: null,
         revokedAt: null
       })),
-      touchLastUsed: jest.fn()
+      touchLastUsed: vi.fn()
     });
     app = createApiServer();
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('returns 401 without a token', async () => {
@@ -102,7 +103,7 @@ describe('GET /api/me', () => {
 
   it('does not gate on permissions: viewer tokens succeed', async () => {
     asMock(getTokenRepository).mockReturnValue({
-      findByHash: jest.fn(() => ({
+      findByHash: vi.fn(() => ({
         id: 1,
         tokenHash: 'test-token',
         name: 'test-token',
@@ -117,7 +118,7 @@ describe('GET /api/me', () => {
         lastUsedAt: null,
         revokedAt: null
       })),
-      touchLastUsed: jest.fn()
+      touchLastUsed: vi.fn()
     });
 
     const response = await request(app).get('/api/me').set(AUTH);

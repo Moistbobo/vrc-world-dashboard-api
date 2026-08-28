@@ -70,7 +70,7 @@ These are correctness blockers that must be in any implementation, regardless of
 ## Phase 1 — connection layer (`src/db/index.ts`)
 
 - Singleton → lazily-created `pg.Pool` from `DATABASE_URL` (lazy, not at import, so
-  jest-mocked config never builds a live pool).
+  vitest-mocked config never builds a live pool).
 - `query()` helper; async `withTransaction()` = `pool.connect()` +
   `BEGIN/COMMIT/ROLLBACK`.
 - `closeDatabase(): Promise<void>` (`await pool.end()`, null the instance).
@@ -153,7 +153,7 @@ All 4 repos (`world`/`token`/`role`/`highPriority`) become async over `Queryable
 - **Rewrite the migration-009 test** (`worldRepository.test.ts:105-164`) for
   `permissions text[]` (array equality).
 - **5 mock-based suites** (`apiServer.test.ts`, `.mutations`, `.highPriority`, `.me`,
-  `worlds/service.test.ts`) mock the repos: `jest.fn()`→`mockResolvedValue`. No pg-mem.
+  `worlds/service.test.ts`) mock the repos: `vi.fn()`→`mockResolvedValue`. No pg-mem.
 - **`backup-db.test.ts`**: mock `pg_dump` via `child_process`; drop the `'SQLite format 3'`
   magic (`:65`) and `journal_mode` (`:100`) asserts; keep retention/prune coverage.
 - **Fallback**: compute epoch/interval values in JS and parameterize (avoids pg-mem fragile

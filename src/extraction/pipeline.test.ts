@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import {
   extractAllWorldIdsFromMessage,
   extractWorldIdFromMessage,
@@ -8,7 +9,7 @@ import {
 import { searchWorldsByName } from '../vrchat/client';
 import getTweetContent from './vxtwitter';
 
-jest.mock('../config', () => ({
+vi.mock('../config', () => ({
   __esModule: true,
   default: {
     VRC_USERNAME: 'mock-username',
@@ -19,27 +20,27 @@ jest.mock('../config', () => ({
   }
 }));
 
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   __esModule: true,
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 
-jest.mock('../vrchat/client', () => ({
-  searchWorldsByName: jest.fn()
+vi.mock('../vrchat/client', () => ({
+  searchWorldsByName: vi.fn()
 }));
 
-jest.mock('./vxtwitter', () => ({
+vi.mock('./vxtwitter', () => ({
   __esModule: true,
-  default: jest.fn()
+  default: vi.fn()
 }));
 
-const searchWorldsByNameMock = searchWorldsByName as jest.Mock;
-const getTweetContentMock = getTweetContent as jest.Mock;
+const searchWorldsByNameMock = searchWorldsByName as Mock;
+const getTweetContentMock = getTweetContent as Mock;
 
 const WRLD = 'wrld_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const WRLD_2 = 'wrld_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeef';
@@ -55,7 +56,7 @@ const makeLimitedWorld = (id: string, name: string, authorName = '') => ({
 
 describe('extractAllWorldIdsFromMessage', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     getTweetContentMock.mockResolvedValue(null);
   });
 
@@ -204,7 +205,7 @@ describe('filterWorldsWithAuthorName', () => {
 
 describe('parseWorldInfoFromPlainText', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     getTweetContentMock.mockResolvedValue(null);
   });
 

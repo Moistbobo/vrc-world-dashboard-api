@@ -4,11 +4,11 @@ import path from 'path';
 import { execFile, type ChildProcess } from 'node:child_process';
 import { createBackup } from './backup-db';
 
-jest.mock('node:child_process', () => ({
-  execFile: jest.fn()
+vi.mock('node:child_process', () => ({
+  execFile: vi.fn()
 }));
 
-const mockExecFile = jest.mocked(execFile);
+const mockExecFile = vi.mocked(execFile);
 
 const DATABASE_URL = 'postgres://user:pass@localhost:5432/worlds';
 
@@ -28,7 +28,7 @@ describe('createBackup', () => {
   beforeEach(() => {
     mockExecFile.mockReset();
     mockExecFile.mockImplementation((_cmd, _args, _opts, cb) => {
-      cb(null, '', '');
+      cb!(null, '', '');
       return {} as ChildProcess;
     });
   });
@@ -87,7 +87,7 @@ describe('createBackup', () => {
 
   test('surfaces pg_dump stderr when the dump fails', async () => {
     mockExecFile.mockImplementation((_cmd, _args, _opts, cb) => {
-      cb(
+      cb!(
         new Error('exit code 1'),
         '',
         'pg_dump: error: connection to server at "localhost" failed'

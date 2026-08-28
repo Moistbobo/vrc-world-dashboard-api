@@ -1,3 +1,4 @@
+import type { MockedFunction } from 'vitest';
 import {
   getFileIdFromAssetUrl,
   getMostRecentUnityPackageForPlatform,
@@ -7,17 +8,17 @@ import {
 } from './packageSizes';
 import { getSupportedPlatforms } from './helpers';
 
-jest.mock('../vrchat/client', () => ({
+vi.mock('../vrchat/client', () => ({
   vrchat: {
     client: {},
-    getFile: jest.fn()
+    getFile: vi.fn()
   }
 }));
 
 import { vrchat } from '../vrchat/client';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
-  fn as jest.MockedFunction<T>;
+  fn as MockedFunction<T>;
 
 describe('getFileIdFromAssetUrl', () => {
   it('extracts the file id from an asset url', () => {
@@ -94,7 +95,7 @@ describe('getPackageSizesInMb', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('returns MB sizes aligned with supported platforms', async () => {

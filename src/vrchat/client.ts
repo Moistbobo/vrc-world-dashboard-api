@@ -16,8 +16,8 @@ export const vrchat = new VRChat({
   },
   authentication: {
     credentials: {
-      username: Config.VRC_USERNAME,
-      password: Config.VRC_PASSWORD,
+      username: Config.VRC_USERNAME!,
+      password: Config.VRC_PASSWORD!,
       totpSecret: Config.VRC_TOTP_KEY
     },
     optimistic: false
@@ -71,7 +71,7 @@ export async function fetchWorldData(worldId: string): Promise<World> {
     client: vrchat.client,
     path: { worldId }
   });
-  return data;
+  return data!;
 }
 
 /**

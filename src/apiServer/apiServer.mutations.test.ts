@@ -1,7 +1,8 @@
+import type { MockedFunction } from 'vitest';
 import { Express } from 'express';
 import request from 'supertest';
 
-jest.mock('../config', () => ({
+vi.mock('../config', () => ({
   __esModule: true,
   default: {
     API_PORT: 3000,
@@ -12,28 +13,28 @@ jest.mock('../config', () => ({
   }
 }));
 
-jest.mock('../db/worldRepository', () => ({
-  getWorldRepository: jest.fn()
+vi.mock('../db/worldRepository', () => ({
+  getWorldRepository: vi.fn()
 }));
 
-jest.mock('../db/tokenRepository', () => ({
+vi.mock('../db/tokenRepository', () => ({
   __esModule: true,
-  getTokenRepository: jest.fn(),
-  hashToken: jest.fn((token: string) => token)
+  getTokenRepository: vi.fn(),
+  hashToken: vi.fn((token: string) => token)
 }));
 
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   __esModule: true,
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
 
-jest.mock('../worlds/service', () => ({
-  addWorld: jest.fn(),
+vi.mock('../worlds/service', () => ({
+  addWorld: vi.fn(),
   WorldServiceError: class WorldServiceError extends Error {
     readonly kind: string;
     readonly statusCode: number;
@@ -45,31 +46,31 @@ jest.mock('../worlds/service', () => ({
   }
 }));
 
-jest.mock('../extraction/pipeline', () => ({
-  extractAllWorldIdsFromMessage: jest.fn()
+vi.mock('../extraction/pipeline', () => ({
+  extractAllWorldIdsFromMessage: vi.fn()
 }));
 
-jest.mock('../tags/extractor', () => ({
-  extractTags: jest.fn(),
-  validateTags: jest.fn()
+vi.mock('../tags/extractor', () => ({
+  extractTags: vi.fn(),
+  validateTags: vi.fn()
 }));
 
-jest.mock('../vrchat/client', () => ({
-  fetchWorldData: jest.fn(),
-  isCurrentUser: jest.fn(),
-  ensureAuthenticated: jest.fn(),
+vi.mock('../vrchat/client', () => ({
+  fetchWorldData: vi.fn(),
+  isCurrentUser: vi.fn(),
+  ensureAuthenticated: vi.fn(),
   vrchat: { client: {} }
 }));
 
 import { getWorldRepository } from '../db/worldRepository';
 import { getTokenRepository } from '../db/tokenRepository';
-import { addWorld } from '../worlds/service';
+import { addWorld, WorldServiceError } from '../worlds/service';
 import { extractAllWorldIdsFromMessage } from '../extraction/pipeline';
 import { extractTags, validateTags } from '../tags/extractor';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
-  fn as jest.MockedFunction<T>;
+  fn as MockedFunction<T>;
 
 const AUTH = { authorization: 'Bearer test-token' };
 
@@ -93,7 +94,7 @@ describe('API mutations', () => {
     ]
   ) {
     asMock(getTokenRepository).mockReturnValue({
-      findByHash: jest.fn(() => ({
+      findByHash: vi.fn(() => ({
         id: 1,
         tokenHash: 'test-token',
         name: 'test-token',
@@ -103,7 +104,7 @@ describe('API mutations', () => {
         lastUsedAt: null,
         revokedAt: null
       })),
-      touchLastUsed: jest.fn()
+      touchLastUsed: vi.fn()
     });
   }
 
@@ -113,7 +114,7 @@ describe('API mutations', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('POST /api/worlds', () => {
@@ -231,7 +232,7 @@ describe('API mutations', () => {
 
     it('returns 502 when VRChat fetch fails', async () => {
       asMock(addWorld).mockRejectedValue(
-        new (jest.requireMock('../worlds/service') as any).WorldServiceError(
+        new WorldServiceError(
           'vrchatFetchFailed',
           'Failed to fetch world data from VRChat',
           502
@@ -308,7 +309,7 @@ describe('API mutations', () => {
   describe('DELETE /api/worlds/:worldId', () => {
     it('deletes the record and returns 204', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ deleteByWorldAndGuild: jest.fn(() => true) })
+        createMockRepo({ deleteByWorldAndGuild: vi.fn(() => true) })
       );
 
       const response = await request(app)
@@ -321,7 +322,7 @@ describe('API mutations', () => {
 
     it('returns 404 when record does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ deleteByWorldAndGuild: jest.fn(() => false) })
+        createMockRepo({ deleteByWorldAndGuild: vi.fn(() => false) })
       );
 
       const response = await request(app)
@@ -346,8 +347,8 @@ describe('API mutations', () => {
     it('updates quality and returns 200 with updated: true', async () => {
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
-          updateQuality: jest.fn(() => true)
+          getByWorldAndGuild: vi.fn(() => ({})),
+          updateQuality: vi.fn(() => true)
         })
       );
 
@@ -363,8 +364,8 @@ describe('API mutations', () => {
     it('returns 200 with updated: false when quality is unchanged', async () => {
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
-          updateQuality: jest.fn(() => false)
+          getByWorldAndGuild: vi.fn(() => ({})),
+          updateQuality: vi.fn(() => false)
         })
       );
 
@@ -387,10 +388,10 @@ describe('API mutations', () => {
     });
 
     it('clears quality with null and returns 200 with updated: true', async () => {
-      const updateQuality = jest.fn(() => true);
+      const updateQuality = vi.fn(() => true);
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
+          getByWorldAndGuild: vi.fn(() => ({})),
           updateQuality
         })
       );
@@ -420,7 +421,7 @@ describe('API mutations', () => {
 
     it('returns 404 when world does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
+        createMockRepo({ getByWorldAndGuild: vi.fn(() => undefined) })
       );
 
       const response = await request(app)
@@ -437,8 +438,8 @@ describe('API mutations', () => {
       asMock(extractTags).mockReturnValue(['horror', 'game']);
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
-          updateTags: jest.fn(() => true)
+          getByWorldAndGuild: vi.fn(() => ({})),
+          updateTags: vi.fn(() => true)
         })
       );
 
@@ -460,10 +461,10 @@ describe('API mutations', () => {
 
     it('computes tags from tagSource but stores sourceContent', async () => {
       asMock(extractTags).mockReturnValue(['horror', 'game']);
-      const updateTags = jest.fn(() => true);
+      const updateTags = vi.fn(() => true);
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
+          getByWorldAndGuild: vi.fn(() => ({})),
           updateTags
         })
       );
@@ -483,7 +484,8 @@ describe('API mutations', () => {
         VALID_BODY.worldId,
         'guild-1',
         ['horror', 'game'],
-        'per-world raw source'
+        'per-world raw source',
+        1
       );
       expect(response.body).toEqual({
         updated: true,
@@ -495,8 +497,8 @@ describe('API mutations', () => {
       asMock(extractTags).mockReturnValue(['horror']);
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
-          updateTags: jest.fn(() => false)
+          getByWorldAndGuild: vi.fn(() => ({})),
+          updateTags: vi.fn(() => false)
         })
       );
 
@@ -520,7 +522,7 @@ describe('API mutations', () => {
 
     it('returns 404 when world does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
+        createMockRepo({ getByWorldAndGuild: vi.fn(() => undefined) })
       );
 
       const response = await request(app)
@@ -591,10 +593,10 @@ describe('API mutations', () => {
         valid: manyTags,
         invalid: []
       });
-      const updateTagsOnly = jest.fn(() => true);
+      const updateTagsOnly = vi.fn(() => true);
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
+          getByWorldAndGuild: vi.fn(() => ({})),
           updateTagsOnly
         })
       );
@@ -608,7 +610,8 @@ describe('API mutations', () => {
       expect(updateTagsOnly).toHaveBeenCalledWith(
         VALID_BODY.worldId,
         'guild-1',
-        manyTags
+        manyTags,
+        1
       );
     });
 
@@ -626,7 +629,7 @@ describe('API mutations', () => {
     it('returns 404 when world does not exist', async () => {
       mockTokenRepo(tagsWritePermissions);
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldAndGuild: jest.fn(() => undefined) })
+        createMockRepo({ getByWorldAndGuild: vi.fn(() => undefined) })
       );
 
       const response = await request(app)
@@ -641,7 +644,7 @@ describe('API mutations', () => {
       mockTokenRepo(tagsWritePermissions);
       asMock(validateTags).mockReturnValue({ valid: [], invalid: ['nope'] });
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldAndGuild: jest.fn(() => ({})) })
+        createMockRepo({ getByWorldAndGuild: vi.fn(() => ({})) })
       );
 
       const response = await request(app)
@@ -659,10 +662,10 @@ describe('API mutations', () => {
         valid: ['horror', 'game'],
         invalid: []
       });
-      const updateTagsOnly = jest.fn(() => true);
+      const updateTagsOnly = vi.fn(() => true);
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
+          getByWorldAndGuild: vi.fn(() => ({})),
           updateTagsOnly
         })
       );
@@ -676,7 +679,8 @@ describe('API mutations', () => {
       expect(updateTagsOnly).toHaveBeenCalledWith(
         VALID_BODY.worldId,
         'guild-1',
-        ['horror', 'game']
+        ['horror', 'game'],
+        1
       );
       expect(response.body).toEqual({
         updated: true,
@@ -689,8 +693,8 @@ describe('API mutations', () => {
       asMock(validateTags).mockReturnValue({ valid: ['horror'], invalid: [] });
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({
-          getByWorldAndGuild: jest.fn(() => ({})),
-          updateTagsOnly: jest.fn(() => false)
+          getByWorldAndGuild: vi.fn(() => ({})),
+          updateTagsOnly: vi.fn(() => false)
         })
       );
 
@@ -706,18 +710,18 @@ describe('API mutations', () => {
 
   function createMockRepo(overrides: Record<string, unknown> = {}) {
     return {
-      count: jest.fn(() => 1428),
-      getAllPaginated: jest.fn(() => ({ total: 0, rows: [] })),
-      getByWorldId: jest.fn(() => []),
-      getUniqueTags: jest.fn(() => []),
-      getMetadataCounts: jest.fn(() => ({
+      count: vi.fn(() => 1428),
+      getAllPaginated: vi.fn(() => ({ total: 0, rows: [] })),
+      getByWorldId: vi.fn(() => []),
+      getUniqueTags: vi.fn(() => []),
+      getMetadataCounts: vi.fn(() => ({
         qualityGood: 0,
         qualityBad: 0,
         platformDesktop: 0,
         platformAndroid: 0,
         platformiOS: 0
       })),
-      getAllWorldGuildPairs: jest.fn(() => new Set()),
+      getAllWorldGuildPairs: vi.fn(() => new Set()),
       ...overrides
     };
   }

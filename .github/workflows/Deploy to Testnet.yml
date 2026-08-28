@@ -51,5 +51,5 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             pnpm install
-            pnpm exec tsc
+            pnpm exec node node_modules/typescript7/bin/tsc
             pm2 restart ecosystem.test.config.js

@@ -36,17 +36,9 @@ jobs:
     name: Deploy to Droplet
     needs: ci
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Get version from package.json
-        id: package_version
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.2
@@ -62,19 +54,37 @@ jobs:
             git fetch origin production
             git reset --hard origin/production
             pnpm install
-            pnpm exec tsc
+            pnpm exec node node_modules/typescript7/bin/tsc
             node dist/scripts/backup-db.js || echo "WARN: deploy-time DB backup failed, continuing deploy"
             NODE_BIN="$(command -v node)"
             CRON_CMD="cd /home/world-tagger/release/sos-world-tagger-api && $NODE_BIN dist/scripts/backup-db.js >> backup-cron.log 2>&1"
             ( crontab -l 2>/dev/null | grep -Fq 'backup-db.js' ) || ( ( crontab -l 2>/dev/null; echo "0 2 * * * $CRON_CMD" ) | crontab - ) || echo "WARN: could not install the daily cron backup entry"
             pm2 restart ecosystem.config.js
 
+  create-release:
+    name: Tag and Create GitHub Release
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from package.json
+        id: package_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Create and push version tag
         run: |
           VERSION="${{ steps.package_version.outputs.version }}"
           TAG="v${VERSION}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists, skipping."
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists on remote, skipping."
           else
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"

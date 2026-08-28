@@ -1,14 +1,24 @@
-import { extractTags, validateTags } from './extractor';
+import {
+  extractTags,
+  validateTags,
+  setTaxonomy,
+  clearTaxonomy
+} from './extractor';
+import { TAG_SEED } from '../db/tagSeed';
 
-jest.mock('../logger', () => ({
+vi.mock('../logger', () => ({
   __esModule: true,
   default: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn()
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn()
   }
 }));
+
+beforeAll(() => {
+  setTaxonomy(TAG_SEED.map((t) => t.tag));
+});
 
 describe('extractTags', () => {
   it('extracts from a structured "Tags:" line', () => {
@@ -79,5 +89,17 @@ describe('validateTags', () => {
 
   it('returns empty valid and invalid for an empty array', () => {
     expect(validateTags([])).toEqual({ valid: [], invalid: [] });
+  });
+});
+
+describe('unloaded taxonomy', () => {
+  afterAll(() => {
+    setTaxonomy(TAG_SEED.map((t) => t.tag));
+  });
+
+  it('throws when the taxonomy has not been loaded', () => {
+    clearTaxonomy();
+    expect(() => extractTags('Tags: horror')).toThrow(/Taxonomy not loaded/);
+    expect(() => validateTags(['horror'])).toThrow(/Taxonomy not loaded/);
   });
 });

@@ -97,6 +97,27 @@ run('Postgres integration', () => {
     expect(meta.highPriorityCount).toBe(0);
   });
 
+  test('tags catalog is seeded and world_tags mirrors world tags', async () => {
+    const q = createQueryable(pool);
+    const tags = await q.query<{
+      tag: string;
+      emoji: string;
+      hex_color: string;
+    }>(`SELECT tag, emoji, hex_color FROM tags ORDER BY tag`);
+    expect(tags.rows).toHaveLength(28);
+    for (const r of tags.rows) {
+      expect(r.emoji).toBeTruthy();
+      expect(r.hex_color).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
+    const junction = await q.query<{ tag: string; count: number }>(
+      `SELECT tag, COUNT(*)::int AS count FROM world_tags GROUP BY tag ORDER BY tag`
+    );
+    expect(junction.rows).toEqual([
+      { tag: 'game', count: 2 },
+      { tag: 'horror', count: 1 }
+    ]);
+  });
+
   test('high-priority add is idempotent via rowCount', async () => {
     const hp = new HighPriorityRepository(createQueryable(pool));
     expect(await hp.add('wrld_it1', 'guild-1')).toEqual({ added: true });
