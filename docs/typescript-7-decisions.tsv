@@ -1,0 +1,4 @@
+ts	what	why	evidence	result
+m0011	Baseline capture	Pre-change state before any edits	tsc --noEmit: TS2688 vitest/globals under node10 (pre-existing); lint exit 0; tests 255 passed/19 skipped; tsc noEmit ~0.45s	baseline NOT green (tsc)
+u1	tsconfig nodenext + import ext fixes	module/moduleResolution node10 removed in TS7; nodenext respects package exports (fixes vitest/globals); dynamic import() needs .js ext under nodenext	tsc --noEmit exit 0; lint exit 0; tests 255 passed/19 skipped	shipped
+u2	enable strict: true, fix 13 errors across 5 files	tsc strict now clean; fixes: entry iteration for customMatchers (regex.ts), non-null on execFile callback in mock, Config.VRC_*! + fetchWorldData data!, unityPackages ?? [], new Date(created_at ?? 0), getFile guard	tsc exit 0; tests 255 passed/19 skipped; lint exit 0	shipped (1 intermediate test failure on getTime() from string fixture, reverted to new Date approach)

@@ -4,6 +4,7 @@
     "skipLibCheck": true,
     "module": "nodenext",
     "esModuleInterop": true,
+    "strict": true,
     "target": "es6",
     "moduleResolution": "nodenext",
     "sourceMap": true,
