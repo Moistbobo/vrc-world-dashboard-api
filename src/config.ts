@@ -28,7 +28,11 @@ const Config = {
   DEV: process.env.DEV === 'true',
   DISABLE_API_RESTRICTIONS:
     process.env.DISABLE_API_RESTRICTIONS === 'true' ||
-    process.env.DEV === 'true'
+    process.env.DEV === 'true',
+  AXIOM_TOKEN: process.env.AXIOM_TOKEN || '',
+  AXIOM_DATASET: process.env.AXIOM_DATASET || '',
+  AXIOM_EDGE: process.env.AXIOM_EDGE || '',
+  AXIOM_ORG_ID: process.env.AXIOM_ORG_ID || ''
 };
 
 export default Config;
