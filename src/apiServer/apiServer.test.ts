@@ -51,6 +51,7 @@ import { getTagRepository } from '../db/tagRepository';
 import { TAG_SEED } from '../db/tagSeed';
 import { searchWorldsByName } from '../vrchat/client';
 import { createApiServer } from './index';
+import logger from '../logger';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
   fn as MockedFunction<T>;
@@ -574,6 +575,34 @@ describe('API Server', () => {
         includeHighPriorityCount: false
       });
       expect(response.body.highPriorityCount).toBeUndefined();
+    });
+  });
+
+  describe('Access log', () => {
+    it('logs status and duration_ms on each request', async () => {
+      asMock(getWorldRepository).mockReturnValue(createMockRepo());
+      const info = asMock(logger.info);
+
+      await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
+
+      const accessLog = info.mock.calls.find(
+        (args) => typeof args[1] === 'string' && args[1].startsWith('HTTP ')
+      );
+      expect(accessLog).toBeDefined();
+
+      const fields = accessLog![0] as {
+        method: string;
+        url: string;
+        status: number;
+        duration_ms: number;
+      };
+      expect(fields.method).toBe('GET');
+      expect(fields.url).toBe('/api/worlds');
+      expect(fields.status).toBe(200);
+      expect(typeof fields.duration_ms).toBe('number');
+      expect(fields.duration_ms).toBeGreaterThanOrEqual(0);
     });
   });
 
