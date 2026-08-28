@@ -1,5 +1,5 @@
 import Config from './config';
-import logger from './logger';
+import logger, { flushLogs } from './logger';
 import { createApiServer } from './apiServer';
 import { runMigrations } from './db/schema';
 import { getQueryable } from './db/pool';
@@ -54,3 +54,12 @@ async function main() {
 }
 
 void main();
+
+async function shutdown(signal: string): Promise<void> {
+  logger.info(`Received ${signal}, flushing logs and shutting down`);
+  await flushLogs();
+  process.exit(0);
+}
+
+process.on('SIGINT', () => void shutdown('SIGINT'));
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
