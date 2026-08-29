@@ -15,10 +15,10 @@ export class HighPriorityRepository {
     addedByTokenId?: number
   ): Promise<{ added: boolean }> {
     const result = await this.db.query(
-      `INSERT INTO high_priority_worlds (world_id, guild_id, added_by_token_id)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (world_id, guild_id) DO NOTHING`,
-      [worldId, guildId, addedByTokenId ?? null]
+      `INSERT INTO high_priority_worlds (world_id, added_by_token_id)
+       VALUES ($1, $2)
+       ON CONFLICT (world_id) DO NOTHING`,
+      [worldId, addedByTokenId ?? null]
     );
     const added = (result.rowCount ?? 0) > 0;
     if (added) {
@@ -34,8 +34,8 @@ export class HighPriorityRepository {
     guildId: string
   ): Promise<{ removed: boolean }> {
     const result = await this.db.query(
-      `DELETE FROM high_priority_worlds WHERE world_id = $1 AND guild_id = $2`,
-      [worldId, guildId]
+      `DELETE FROM high_priority_worlds WHERE world_id = $1`,
+      [worldId]
     );
     const removed = (result.rowCount ?? 0) > 0;
     if (removed) {

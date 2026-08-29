@@ -12,7 +12,7 @@ describe('world records', () => {
     // on world_records rejects inserts/updates that use the default NULL.
     // Drop it in the in-memory test db; no assertion depends on it firing.
     await queryable.query(
-      'ALTER TABLE world_records DROP CONSTRAINT world_records_constraint_1'
+      'ALTER TABLE world_records DROP CONSTRAINT world_records_quality_check'
     );
   });
 

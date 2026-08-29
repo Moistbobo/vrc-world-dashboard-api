@@ -30,7 +30,8 @@ const MIGRATION_NAMES = [
   '009_grant_tags_write_to_curator_and_admin',
   '010_create_tags',
   '011_create_world_tags',
-  '012_migrate_world_tags'
+  '012_migrate_world_tags',
+  '013_world_records_world_id_key'
 ];
 
 interface SqliteRoleRow {
@@ -261,13 +262,12 @@ export async function loadWorldRecords(
   for (const row of rows) {
     const result = await db.query(
       `INSERT INTO world_records
-         (id, world_id, guild_id, message_id, name, author_name, capacity,
+         (world_id, guild_id, message_id, name, author_name, capacity,
           platforms, image_url, source_content, vrchat_data, package_sizes,
           quality, internal_add_date, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        ON CONFLICT DO NOTHING`,
       [
-        row.id,
         row.world_id,
         row.guild_id,
         row.message_id,
@@ -298,15 +298,14 @@ export async function loadWorldRecords(
         [tag]
       );
       await db.query(
-        `INSERT INTO world_tags (world_id, guild_id, tag)
-         VALUES ($1, $2, $3)
+        `INSERT INTO world_tags (world_id, tag)
+         VALUES ($1, $2)
          ON CONFLICT DO NOTHING`,
-        [row.world_id, row.guild_id, tag]
+        [row.world_id, tag]
       );
     }
   }
 
-  await syncSequence(db, 'world_records');
   logger.info(
     `world_records: ${inserted} inserted, ${rows.length - inserted} already present`
   );
@@ -381,10 +380,10 @@ export async function loadHighPriorityWorlds(
 
   for (const row of rows) {
     const result = await db.query(
-      `INSERT INTO high_priority_worlds (world_id, guild_id, added_at, added_by_token_id)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO high_priority_worlds (world_id, added_at, added_by_token_id)
+       VALUES ($1, $2, $3)
        ON CONFLICT DO NOTHING`,
-      [row.world_id, row.guild_id, row.added_at ?? now, row.added_by_token_id]
+      [row.world_id, row.added_at ?? now, row.added_by_token_id]
     );
     inserted += result.rowCount ?? 0;
   }

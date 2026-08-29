@@ -16,7 +16,7 @@ describe('high priority worlds', () => {
     // on world_records rejects inserts/updates that use the default NULL.
     // Drop it in the in-memory test db; no assertion depends on it firing.
     await queryable.query(
-      'ALTER TABLE world_records DROP CONSTRAINT world_records_constraint_1'
+      'ALTER TABLE world_records DROP CONSTRAINT world_records_quality_check'
     );
   });
 
@@ -87,8 +87,8 @@ describe('high priority worlds', () => {
     const repo = new HighPriorityRepository(queryable);
     await repo.add('wrld_abc', 'guild-1', record.id);
     const result = await queryable.query<{ added_by_token_id: number | null }>(
-      'SELECT added_by_token_id FROM high_priority_worlds WHERE world_id = $1 AND guild_id = $2',
-      ['wrld_abc', 'guild-1']
+      'SELECT added_by_token_id FROM high_priority_worlds WHERE world_id = $1',
+      ['wrld_abc']
     );
     expect(result.rows[0].added_by_token_id).toBe(record.id);
   });

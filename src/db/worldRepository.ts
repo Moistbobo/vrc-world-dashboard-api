@@ -91,7 +91,7 @@ export class WorldRepository {
          platforms, image_url, source_content, vrchat_data, package_sizes, created_at, internal_add_date)
       VALUES
         ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, (EXTRACT(EPOCH FROM NOW()))::bigint), $13)
-      ON CONFLICT(world_id, guild_id) DO UPDATE SET
+      ON CONFLICT(world_id) DO UPDATE SET
         name = EXCLUDED.name,
         author_name = EXCLUDED.author_name,
         capacity = EXCLUDED.capacity,
@@ -146,26 +146,16 @@ export class WorldRepository {
     tags: string[],
     addedByTokenId?: number
   ): Promise<void> {
-    await tx.query(
-      `DELETE FROM world_tags WHERE world_id = $1 AND guild_id = $2`,
-      [worldId, guildId]
-    );
+    await tx.query(`DELETE FROM world_tags WHERE world_id = $1`, [worldId]);
     if (tags.length === 0) {
       return;
     }
-    const values = tags.flatMap((t) => [
-      worldId,
-      guildId,
-      t,
-      addedByTokenId ?? null
-    ]);
+    const values = tags.flatMap((t) => [worldId, t, addedByTokenId ?? null]);
     const placeholders = tags
-      .map(
-        (_, i) => `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`
-      )
+      .map((_, i) => `($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`)
       .join(', ');
     await tx.query(
-      `INSERT INTO world_tags (world_id, guild_id, tag, added_by_token_id)
+      `INSERT INTO world_tags (world_id, tag, added_by_token_id)
        VALUES ${placeholders}`,
       values
     );
@@ -209,7 +199,7 @@ export class WorldRepository {
       SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
       FROM world_records wr
       LEFT JOIN high_priority_worlds hp
-        ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
+        ON hp.world_id = wr.world_id
       WHERE wr.world_id = $1
       ORDER BY wr.created_at DESC
     `;
@@ -228,7 +218,7 @@ export class WorldRepository {
       SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
       FROM world_records wr
       LEFT JOIN high_priority_worlds hp
-        ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
+        ON hp.world_id = wr.world_id
       WHERE wr.world_id = $1 AND wr.guild_id = $2
       LIMIT 1
     `;
@@ -250,27 +240,25 @@ export class WorldRepository {
     const placeholders = worldIds.map((_, i) => `$${i + 1}`).join(', ');
     const result = await this.db.query<{
       world_id: string;
-      guild_id: string;
       tag: string;
     }>(
-      `SELECT wt.world_id, wt.guild_id, wt.tag
+      `SELECT wt.world_id, wt.tag
        FROM world_tags wt
        WHERE wt.world_id IN (${placeholders})
-       ORDER BY wt.world_id, wt.guild_id, wt.added_at, wt.id`,
+       ORDER BY wt.world_id, wt.added_at, wt.id`,
       worldIds
     );
     const byKey = new Map<string, string[]>();
     for (const row of result.rows) {
-      const key = `${row.world_id}\u0000${row.guild_id}`;
-      const arr = byKey.get(key);
+      const arr = byKey.get(row.world_id);
       if (arr) {
         arr.push(row.tag);
       } else {
-        byKey.set(key, [row.tag]);
+        byKey.set(row.world_id, [row.tag]);
       }
     }
     for (const record of records) {
-      record.tags = byKey.get(`${record.worldId}\u0000${record.guildId}`) ?? [];
+      record.tags = byKey.get(record.worldId) ?? [];
     }
     return records;
   }
@@ -598,7 +586,7 @@ export class WorldRepository {
       SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
       FROM world_records wr
       LEFT JOIN high_priority_worlds hp
-        ON hp.world_id = wr.world_id AND hp.guild_id = wr.guild_id
+        ON hp.world_id = wr.world_id
       ${whereClause}
       ORDER BY wr.created_at DESC LIMIT $${
         params.length + 1
