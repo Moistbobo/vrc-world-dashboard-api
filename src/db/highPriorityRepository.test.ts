@@ -41,13 +41,13 @@ describe('high priority worlds', () => {
   test('add inserts a row and reports added: true', async () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
-    expect(await repo.add('wrld_abc', 'guild-1')).toEqual({ added: true });
+    expect(await repo.add('wrld_abc')).toEqual({ added: true });
   });
 
   test('add is idempotent', async () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
-    expect(await repo.add('wrld_abc', 'guild-1')).toEqual({ added: true });
+    expect(await repo.add('wrld_abc')).toEqual({ added: true });
 
     // pg-mem reports rowCount 1 even when ON CONFLICT DO NOTHING skips a
     // duplicate (Postgres reports 0), so replay the duplicate insert as a
@@ -57,21 +57,21 @@ describe('high priority worlds', () => {
         ? []
         : null
     );
-    expect(await repo.add('wrld_abc', 'guild-1')).toEqual({ added: false });
+    expect(await repo.add('wrld_abc')).toEqual({ added: false });
     guard.unsubscribe();
   });
 
   test('remove deletes a row and reports removed: true', async () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
-    await repo.add('wrld_abc', 'guild-1');
-    expect(await repo.remove('wrld_abc', 'guild-1')).toEqual({ removed: true });
+    await repo.add('wrld_abc');
+    expect(await repo.remove('wrld_abc')).toEqual({ removed: true });
   });
 
   test('remove is idempotent', async () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
-    expect(await repo.remove('wrld_abc', 'guild-1')).toEqual({
+    expect(await repo.remove('wrld_abc')).toEqual({
       removed: false
     });
   });
@@ -85,7 +85,7 @@ describe('high priority worlds', () => {
       viewer
     );
     const repo = new HighPriorityRepository(queryable);
-    await repo.add('wrld_abc', 'guild-1', record.id);
+    await repo.add('wrld_abc', record.id);
     const result = await queryable.query<{ added_by_token_id: number | null }>(
       'SELECT added_by_token_id FROM high_priority_worlds WHERE world_id = $1',
       ['wrld_abc']
@@ -96,11 +96,8 @@ describe('high priority worlds', () => {
   test('row cascades away when the world_records row is deleted', async () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
-    await repo.add('wrld_abc', 'guild-1');
-    await new WorldRepository(queryable).deleteByWorldAndGuild(
-      'wrld_abc',
-      'guild-1'
-    );
+    await repo.add('wrld_abc');
+    await new WorldRepository(queryable).deleteByWorldId('wrld_abc');
     const result = await queryable.query<{ count: number }>(
       'SELECT COUNT(*)::int as count FROM high_priority_worlds'
     );

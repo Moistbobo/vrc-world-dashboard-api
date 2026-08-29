@@ -4,7 +4,6 @@ import { toNumber, toNumberOrNull, toArray } from './mappers';
 import logger from '../logger';
 
 export interface WorldRecord {
-  id?: number;
   worldId: string;
   guildId: string;
   messageId: string;
@@ -25,7 +24,6 @@ export interface WorldRecord {
 }
 
 interface WorldRow extends Record<string, unknown> {
-  id: bigint | number;
   world_id: string;
   guild_id: string;
   message_id: string;
@@ -47,7 +45,6 @@ interface WorldRow extends Record<string, unknown> {
 
 function rowToRecord(row: WorldRow): WorldRecord {
   return {
-    id: toNumber(row.id),
     worldId: row.world_id,
     guildId: row.guild_id,
     messageId: row.message_id,
@@ -76,8 +73,9 @@ export class WorldRepository {
   }
 
   /**
-   * Upsert a world record. Preserves created_at, id, and internal_add_date on
-   * update; updates all other fields and sets updated_at to now. When
+   * Upsert a world record keyed by world_id. The last writer wins and stamps
+   * guild_id with the new submitter; created_at and internal_add_date are
+   * preserved on update, and updated_at is set to now. When
    * internal_add_date is missing on both insert and the existing row, the
    * current time is used as a fallback.
    *
@@ -92,6 +90,7 @@ export class WorldRepository {
       VALUES
         ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, (EXTRACT(EPOCH FROM NOW()))::bigint), $13)
       ON CONFLICT(world_id) DO UPDATE SET
+        guild_id = EXCLUDED.guild_id,
         name = EXCLUDED.name,
         author_name = EXCLUDED.author_name,
         capacity = EXCLUDED.capacity,
@@ -120,13 +119,7 @@ export class WorldRepository {
         record.createdAt ?? null,
         record.internalAddDate ?? null
       ]);
-      await this.replaceTags(
-        tx,
-        record.worldId,
-        record.guildId,
-        record.tags,
-        addedByTokenId
-      );
+      await this.replaceTags(tx, record.worldId, record.tags, addedByTokenId);
     });
 
     logger.debug(
@@ -142,7 +135,6 @@ export class WorldRepository {
   private async replaceTags(
     tx: Queryable,
     worldId: string,
-    guildId: string,
     tags: string[],
     addedByTokenId?: number
   ): Promise<void> {
@@ -168,10 +160,9 @@ export class WorldRepository {
    */
   async backfillInternalAddDate(
     worldId: string,
-    guildId: string,
     internalAddDate: number
   ): Promise<boolean> {
-    const existing = await this.getByWorldAndGuild(worldId, guildId);
+    const existing = await this.getByWorldId(worldId);
     if (!existing || existing.internalAddDate != null) {
       return false;
     }
@@ -179,50 +170,30 @@ export class WorldRepository {
     const result = await this.db.query(
       `UPDATE world_records
        SET internal_add_date = $1
-       WHERE world_id = $2 AND guild_id = $3`,
-      [internalAddDate, worldId, guildId]
+       WHERE world_id = $2`,
+      [internalAddDate, worldId]
     );
     const didUpdate = (result.rowCount ?? 0) > 0;
     if (didUpdate) {
       logger.info(
-        `Backfilled internal_add_date for world ${worldId} in guild ${guildId}: ${internalAddDate}`
+        `Backfilled internal_add_date for world ${worldId}: ${internalAddDate}`
       );
     }
     return didUpdate;
   }
 
   /**
-   * Get all guild-scoped records for a given world ID.
+   * Get the single record for a given world ID.
    */
-  async getByWorldId(worldId: string): Promise<WorldRecord[]> {
+  async getByWorldId(worldId: string): Promise<WorldRecord | undefined> {
     const sql = `
       SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
       FROM world_records wr
       LEFT JOIN high_priority_worlds hp
         ON hp.world_id = wr.world_id
       WHERE wr.world_id = $1
-      ORDER BY wr.created_at DESC
     `;
     const result = await this.db.query<WorldRow>(sql, [worldId]);
-    return this.attachTags(result.rows.map(rowToRecord));
-  }
-
-  /**
-   * Get a specific world record by world ID + guild ID.
-   */
-  async getByWorldAndGuild(
-    worldId: string,
-    guildId: string
-  ): Promise<WorldRecord | undefined> {
-    const sql = `
-      SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
-      FROM world_records wr
-      LEFT JOIN high_priority_worlds hp
-        ON hp.world_id = wr.world_id
-      WHERE wr.world_id = $1 AND wr.guild_id = $2
-      LIMIT 1
-    `;
-    const result = await this.db.query<WorldRow>(sql, [worldId, guildId]);
     const record = result.rows[0] ? rowToRecord(result.rows[0]) : undefined;
     return record ? (await this.attachTags([record]))[0] : undefined;
   }
@@ -267,11 +238,8 @@ export class WorldRepository {
    * Move a world record to the deleted_world_records archive table,
    * then remove it from the live table. Returns true if a row existed.
    */
-  async deleteByWorldAndGuild(
-    worldId: string,
-    guildId: string
-  ): Promise<boolean> {
-    const existing = await this.getByWorldAndGuild(worldId, guildId);
+  async deleteByWorldId(worldId: string): Promise<boolean> {
+    const existing = await this.getByWorldId(worldId);
     if (!existing) {
       return false;
     }
@@ -281,7 +249,7 @@ export class WorldRepository {
         (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, internal_add_date, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     `;
-    const deleteSql = `DELETE FROM world_records WHERE world_id = $1 AND guild_id = $2`;
+    const deleteSql = `DELETE FROM world_records WHERE world_id = $1`;
 
     const didDelete = await this.db.withTransaction(async (tx) => {
       await tx.query(archiveSql, [
@@ -301,13 +269,13 @@ export class WorldRepository {
         existing.createdAt ?? null,
         existing.updatedAt ?? null
       ]);
-      const result = await tx.query(deleteSql, [worldId, guildId]);
+      const result = await tx.query(deleteSql, [worldId]);
       return (result.rowCount ?? 0) > 0;
     });
 
     if (didDelete) {
       logger.info(
-        `Archived world record ${worldId} from guild ${guildId} into deleted_world_records`
+        `Archived world record ${worldId} into deleted_world_records`
       );
     }
     return didDelete;
@@ -320,17 +288,16 @@ export class WorldRepository {
    */
   async updateQuality(
     worldId: string,
-    guildId: string,
     quality: 'good' | 'bad' | null
   ): Promise<boolean> {
-    const existing = await this.getByWorldAndGuild(worldId, guildId);
+    const existing = await this.getByWorldId(worldId);
     if (!existing) {
       return false;
     }
 
     if (existing.quality === quality) {
       logger.debug(
-        `Skipping quality update for world ${worldId} in guild ${guildId}: already "${quality}"`
+        `Skipping quality update for world ${worldId}: already "${quality}"`
       );
       return false;
     }
@@ -338,14 +305,12 @@ export class WorldRepository {
     const result = await this.db.query(
       `UPDATE world_records
        SET quality = $1, updated_at = (EXTRACT(EPOCH FROM NOW()))::bigint
-       WHERE world_id = $2 AND guild_id = $3`,
-      [quality, worldId, guildId]
+       WHERE world_id = $2`,
+      [quality, worldId]
     );
     const didUpdate = (result.rowCount ?? 0) > 0;
     if (didUpdate) {
-      logger.info(
-        `Set quality to "${quality}" for world ${worldId} in guild ${guildId}`
-      );
+      logger.info(`Set quality to "${quality}" for world ${worldId}`);
     }
     return didUpdate;
   }
@@ -357,12 +322,11 @@ export class WorldRepository {
    */
   async updateTags(
     worldId: string,
-    guildId: string,
     tags: string[],
     sourceContent: string | null,
     addedByTokenId?: number
   ): Promise<boolean> {
-    const existing = await this.getByWorldAndGuild(worldId, guildId);
+    const existing = await this.getByWorldId(worldId);
     if (!existing) {
       return false;
     }
@@ -372,27 +336,27 @@ export class WorldRepository {
 
     if (!tagsChanged && !sourceChanged) {
       logger.debug(
-        `Skipping tag update for world ${worldId} in guild ${guildId}: no changes`
+        `Skipping tag update for world ${worldId}: no changes`
       );
       return false;
     }
 
     await this.db.withTransaction(async (tx) => {
       if (tagsChanged) {
-        await this.replaceTags(tx, worldId, guildId, tags, addedByTokenId);
+        await this.replaceTags(tx, worldId, tags, addedByTokenId);
       }
       if (sourceChanged) {
         await tx.query(
           `UPDATE world_records
            SET source_content = $1, updated_at = (EXTRACT(EPOCH FROM NOW()))::bigint
-           WHERE world_id = $2 AND guild_id = $3`,
-          [sourceContent, worldId, guildId]
+           WHERE world_id = $2`,
+          [sourceContent, worldId]
         );
       }
     });
 
     logger.info(
-      `Updated tags for world ${worldId} in guild ${guildId}: [${tags.join(', ')}]`
+      `Updated tags for world ${worldId}: [${tags.join(', ')}]`
     );
     return true;
   }
@@ -403,18 +367,17 @@ export class WorldRepository {
    */
   async updateTagsOnly(
     worldId: string,
-    guildId: string,
     tags: string[],
     addedByTokenId?: number
   ): Promise<boolean> {
-    const existing = await this.getByWorldAndGuild(worldId, guildId);
+    const existing = await this.getByWorldId(worldId);
     if (!existing) {
       return false;
     }
 
     if (JSON.stringify(existing.tags) === JSON.stringify(tags)) {
       logger.debug(
-        `Skipping tag-only update for world ${worldId} in guild ${guildId}: tags unchanged`
+        `Skipping tag-only update for world ${worldId}: tags unchanged`
       );
       return false;
     }
@@ -423,31 +386,26 @@ export class WorldRepository {
       await tx.query(
         `UPDATE world_records
          SET updated_at = (EXTRACT(EPOCH FROM NOW()))::bigint
-         WHERE world_id = $1 AND guild_id = $2`,
-        [worldId, guildId]
+         WHERE world_id = $1`,
+        [worldId]
       );
-      await this.replaceTags(tx, worldId, guildId, tags, addedByTokenId);
+      await this.replaceTags(tx, worldId, tags, addedByTokenId);
     });
 
     logger.info(
-      `Updated tags for world ${worldId} in guild ${guildId}: [${tags.join(', ')}]`
+      `Updated tags for world ${worldId}: [${tags.join(', ')}]`
     );
     return true;
   }
 
   /**
-   * Get all world_id-guild_id pairs for caching.
+   * Get all distinct world IDs for caching.
    */
-  async getAllWorldGuildPairs(): Promise<
-    { worldId: string; guildId: string }[]
-  > {
-    const result = await this.db.query<{ world_id: string; guild_id: string }>(
-      `SELECT world_id, guild_id FROM world_records`
+  async getAllWorldIds(): Promise<string[]> {
+    const result = await this.db.query<{ world_id: string }>(
+      `SELECT DISTINCT world_id FROM world_records ORDER BY world_id`
     );
-    return result.rows.map((r) => ({
-      worldId: r.world_id,
-      guildId: r.guild_id
-    }));
+    return result.rows.map((r) => r.world_id);
   }
 
   private buildWhereClause(filters?: {
@@ -493,7 +451,7 @@ export class WorldRepository {
         params.push(tag);
         const p = params.length;
         whereParts.push(
-          `EXISTS (SELECT 1 FROM world_tags wt WHERE wt.world_id = wr.world_id AND wt.guild_id = wr.guild_id AND wt.tag = $${p})`
+          `EXISTS (SELECT 1 FROM world_tags wt WHERE wt.world_id = wr.world_id AND wt.tag = $${p})`
         );
       }
     }
@@ -510,7 +468,7 @@ export class WorldRepository {
         params.push(pattern);
         const p = params.length;
         whereParts.push(
-          `(wr.name ILIKE $${p} OR wr.author_name ILIKE $${p} OR wr.source_content ILIKE $${p} OR wr.world_id ILIKE $${p} OR EXISTS (SELECT 1 FROM world_tags wt WHERE wt.world_id = wr.world_id AND wt.guild_id = wr.guild_id AND wt.tag ILIKE $${p}))`
+          `(wr.name ILIKE $${p} OR wr.author_name ILIKE $${p} OR wr.source_content ILIKE $${p} OR wr.world_id ILIKE $${p} OR EXISTS (SELECT 1 FROM world_tags wt WHERE wt.world_id = wr.world_id AND wt.tag ILIKE $${p}))`
         );
       }
     }
@@ -542,7 +500,7 @@ export class WorldRepository {
 
     if (filters?.highPriorityOnly) {
       whereParts.push(
-        'EXISTS (SELECT 1 FROM high_priority_worlds hp2 WHERE hp2.world_id = wr.world_id AND hp2.guild_id = wr.guild_id)'
+        'EXISTS (SELECT 1 FROM high_priority_worlds hp2 WHERE hp2.world_id = wr.world_id)'
       );
     }
 

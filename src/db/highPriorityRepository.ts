@@ -11,7 +11,6 @@ export class HighPriorityRepository {
 
   async add(
     worldId: string,
-    guildId: string,
     addedByTokenId?: number
   ): Promise<{ added: boolean }> {
     const result = await this.db.query(
@@ -22,26 +21,19 @@ export class HighPriorityRepository {
     );
     const added = (result.rowCount ?? 0) > 0;
     if (added) {
-      logger.info(
-        `Marked world ${worldId} in guild ${guildId} as high priority`
-      );
+      logger.info(`Marked world ${worldId} as high priority`);
     }
     return { added };
   }
 
-  async remove(
-    worldId: string,
-    guildId: string
-  ): Promise<{ removed: boolean }> {
+  async remove(worldId: string): Promise<{ removed: boolean }> {
     const result = await this.db.query(
       `DELETE FROM high_priority_worlds WHERE world_id = $1`,
       [worldId]
     );
     const removed = (result.rowCount ?? 0) > 0;
     if (removed) {
-      logger.info(
-        `Removed high priority flag for world ${worldId} in guild ${guildId}`
-      );
+      logger.info(`Removed high priority flag for world ${worldId}`);
     }
     return { removed };
   }

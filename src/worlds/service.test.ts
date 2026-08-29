@@ -66,7 +66,7 @@ describe('addWorld', () => {
 
   it('returns duplicate with existingMessageId when record exists', async () => {
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild: vi.fn(() => ({
+      getByWorldId: vi.fn(() => ({
         worldId: REQUEST.worldId,
         guildId: REQUEST.guildId,
         messageId: '1240000000000000000',
@@ -96,7 +96,7 @@ describe('addWorld', () => {
 
   it('fetches VRChat data, extracts tags, and upserts when new', async () => {
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild: vi.fn(() => undefined),
+      getByWorldId: vi.fn(() => undefined),
       upsert: vi.fn()
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
@@ -118,11 +118,11 @@ describe('addWorld', () => {
   });
 
   it('skips the duplicate check when checkDuplicate is false', async () => {
-    const getByWorldAndGuild = vi.fn(() => ({
+    const getByWorldId = vi.fn(() => ({
       messageId: '1240000000000000000'
     }));
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild,
+      getByWorldId,
       upsert: vi.fn()
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
@@ -131,13 +131,13 @@ describe('addWorld', () => {
 
     const result = await addWorld({ ...REQUEST, checkDuplicate: false });
 
-    expect(getByWorldAndGuild).not.toHaveBeenCalled();
+    expect(getByWorldId).not.toHaveBeenCalled();
     expect(result.status).toBe('created');
   });
 
   it('uses the provided messageTimestamp for internalAddDate', async () => {
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild: vi.fn(() => undefined),
+      getByWorldId: vi.fn(() => undefined),
       upsert: vi.fn()
     });
     asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
@@ -154,7 +154,7 @@ describe('addWorld', () => {
 
   it('throws WorldServiceError with 502 when VRChat fetch fails', async () => {
     asMock(getWorldRepository).mockReturnValue({
-      getByWorldAndGuild: vi.fn(() => undefined),
+      getByWorldId: vi.fn(() => undefined),
       upsert: vi.fn()
     });
     asMock(fetchWorldData).mockRejectedValue(new Error('VRC API down'));
