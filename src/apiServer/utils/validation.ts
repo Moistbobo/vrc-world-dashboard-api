@@ -7,25 +7,18 @@ export interface AddWorldBody {
   checkDuplicate?: boolean;
 }
 
-export interface DeleteWorldBody {
-  guildId: string;
-}
-
 export interface UpdateQualityBody {
-  guildId: string;
   quality: 'good' | 'bad' | null;
   messageTimestamp?: number;
 }
 
 export interface UpdateTagsBody {
-  guildId: string;
   sourceContent: string | null;
   tagSource?: string;
   messageTimestamp?: number;
 }
 
 export interface UpdateTagsEditBody {
-  guildId: string;
   tags: string[];
 }
 
@@ -86,17 +79,10 @@ export function parseAddWorldBody(body: unknown): AddWorldBody | null {
   };
 }
 
-export function parseGuildIdBody(body: unknown): DeleteWorldBody | null {
-  if (!isObject(body)) return null;
-  if (!isNonEmptyString(body.guildId)) return null;
-  return { guildId: body.guildId };
-}
-
 export function parseUpdateQualityBody(
   body: unknown
 ): UpdateQualityBody | null {
   if (!isObject(body)) return null;
-  if (!isNonEmptyString(body.guildId)) return null;
   if (!isQualityValue(body.quality)) return null;
   const messageTimestamp = body.messageTimestamp;
   if (
@@ -106,7 +92,6 @@ export function parseUpdateQualityBody(
     return null;
   }
   return {
-    guildId: body.guildId,
     quality: body.quality,
     messageTimestamp: messageTimestamp as number | undefined
   };
@@ -124,7 +109,6 @@ export function parseExtractWorldsBody(
 
 export function parseUpdateTagsBody(body: unknown): UpdateTagsBody | null {
   if (!isObject(body)) return null;
-  if (!isNonEmptyString(body.guildId)) return null;
   const sourceContent = body.sourceContent;
   if (sourceContent !== null && typeof sourceContent !== 'string') return null;
   const tagSource = body.tagSource;
@@ -137,7 +121,6 @@ export function parseUpdateTagsBody(body: unknown): UpdateTagsBody | null {
     return null;
   }
   return {
-    guildId: body.guildId,
     sourceContent: sourceContent as string | null,
     tagSource: tagSource as string | undefined,
     messageTimestamp: messageTimestamp as number | undefined
@@ -148,8 +131,7 @@ export function parseUpdateTagsEditBody(
   body: unknown
 ): UpdateTagsEditBody | null {
   if (!isObject(body)) return null;
-  if (!isNonEmptyString(body.guildId)) return null;
   if (!Array.isArray(body.tags)) return null;
   if (!body.tags.every((value) => typeof value === 'string')) return null;
-  return { guildId: body.guildId, tags: body.tags as string[] };
+  return { tags: body.tags as string[] };
 }

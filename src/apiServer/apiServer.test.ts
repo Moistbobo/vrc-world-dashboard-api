@@ -80,24 +80,23 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
         }
       ]
     })),
-    getByWorldId: vi.fn(() => [
-      {
-        worldId: 'wrld_abc123',
-        guildId: 'guild-1',
-        name: 'Spooky Mansion',
-        authorName: 'GhostDev',
-        capacity: 16,
-        platforms: ['standalonewindows', 'android'],
-        tags: ['horror', 'game'],
-        imageUrl: 'https://example.com/img.png',
-        sourceContent: null,
-        vrchatData: null,
-        packageSizes: [104.5, 78.2],
-        quality: 'good',
-        createdAt: 1717257600,
-        updatedAt: 1717257600
-      }
-    ]),
+    getByWorldId: vi.fn(() => ({
+      worldId: 'wrld_abc123',
+      guildId: 'guild-1',
+      name: 'Spooky Mansion',
+      authorName: 'GhostDev',
+      capacity: 16,
+      platforms: ['standalonewindows', 'android'],
+      tags: ['horror', 'game'],
+      imageUrl: 'https://example.com/img.png',
+      sourceContent: null,
+      vrchatData: null,
+      packageSizes: [104.5, 78.2],
+      quality: 'good',
+      createdAt: 1717257600,
+      updatedAt: 1717257600
+    })),
+    getAllWorldIds: vi.fn(() => ['wrld_abc123', 'wrld_def456']),
     getUniqueTags: vi.fn(() => [
       { tag: 'horror', count: 312 },
       { tag: 'game', count: 145 }
@@ -370,7 +369,7 @@ describe('API Server', () => {
 
     it('returns 404 when world does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldId: vi.fn(() => []) })
+        createMockRepo({ getByWorldId: vi.fn(() => undefined) })
       );
 
       const response = await request(app)
@@ -380,6 +379,21 @@ describe('API Server', () => {
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
         error: 'World not found'
+      });
+    });
+  });
+
+  describe('GET /api/worlds/ids', () => {
+    it('returns distinct world ids', async () => {
+      asMock(getWorldRepository).mockReturnValue(createMockRepo());
+
+      const response = await request(app)
+        .get('/api/worlds/ids')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ids: ['wrld_abc123', 'wrld_def456']
       });
     });
   });
