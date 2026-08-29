@@ -88,9 +88,7 @@ describe('migration 013_world_records_world_id_key', () => {
       world_id: string;
       guild_id: string;
       name: string | null;
-    }>(
-      `SELECT world_id, guild_id, name FROM world_records ORDER BY world_id`
-    );
+    }>(`SELECT world_id, guild_id, name FROM world_records ORDER BY world_id`);
     expect(worlds.rows).toEqual([
       { world_id: 'wrld_x', guild_id: 'guild-b', name: 'new x' },
       { world_id: 'wrld_y', guild_id: 'guild-b', name: 'tie b' }
@@ -123,7 +121,9 @@ describe('migration 013_world_records_world_id_key', () => {
       `INSERT INTO high_priority_worlds (world_id) VALUES ('wrld_abc')`
     );
 
-    await queryable.query(`DELETE FROM world_records WHERE world_id = 'wrld_abc'`);
+    await queryable.query(
+      `DELETE FROM world_records WHERE world_id = 'wrld_abc'`
+    );
 
     const junctions = await queryable.query<{ t: string; n: number }>(
       `SELECT 'world_tags' AS t, COUNT(*)::int AS n FROM world_tags

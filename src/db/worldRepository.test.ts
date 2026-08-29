@@ -43,12 +43,8 @@ describe('world records', () => {
     test('sets quality to good', async () => {
       await addWorld('wrld_abc', 'guild-1');
       const repo = new WorldRepository(queryable);
-      expect(await repo.updateQuality('wrld_abc', 'good')).toBe(
-        true
-      );
-      expect(
-        (await repo.getByWorldId('wrld_abc'))?.quality
-      ).toBe('good');
+      expect(await repo.updateQuality('wrld_abc', 'good')).toBe(true);
+      expect((await repo.getByWorldId('wrld_abc'))?.quality).toBe('good');
     });
 
     test('clears quality with null', async () => {
@@ -56,9 +52,7 @@ describe('world records', () => {
       const repo = new WorldRepository(queryable);
       await repo.updateQuality('wrld_abc', 'good');
       expect(await repo.updateQuality('wrld_abc', null)).toBe(true);
-      expect(
-        (await repo.getByWorldId('wrld_abc'))?.quality
-      ).toBeNull();
+      expect((await repo.getByWorldId('wrld_abc'))?.quality).toBeNull();
     });
 
     test('clearing an already-null quality reports unchanged', async () => {
@@ -69,9 +63,7 @@ describe('world records', () => {
 
     test('returns false when the world does not exist', async () => {
       const repo = new WorldRepository(queryable);
-      expect(await repo.updateQuality('wrld_abc', 'good')).toBe(
-        false
-      );
+      expect(await repo.updateQuality('wrld_abc', 'good')).toBe(false);
     });
   });
 
@@ -80,9 +72,9 @@ describe('world records', () => {
       await addWorld('wrld_abc', 'guild-1', ['kino'], 'original source');
       const repo = new WorldRepository(queryable);
 
-      expect(
-        await repo.updateTagsOnly('wrld_abc', ['horror', 'game'])
-      ).toBe(true);
+      expect(await repo.updateTagsOnly('wrld_abc', ['horror', 'game'])).toBe(
+        true
+      );
 
       const record = (await repo.getByWorldId('wrld_abc'))!;
       expect(record.tags).toEqual(['horror', 'game']);
@@ -93,17 +85,13 @@ describe('world records', () => {
       await addWorld('wrld_abc', 'guild-1', ['horror']);
       const repo = new WorldRepository(queryable);
 
-      expect(await repo.updateTagsOnly('wrld_abc', ['horror'])).toBe(
-        false
-      );
+      expect(await repo.updateTagsOnly('wrld_abc', ['horror'])).toBe(false);
     });
 
     test('returns false when the record does not exist', async () => {
       const repo = new WorldRepository(queryable);
 
-      expect(
-        await repo.updateTagsOnly('wrld_missing', ['horror'])
-      ).toBe(false);
+      expect(await repo.updateTagsOnly('wrld_missing', ['horror'])).toBe(false);
     });
   });
 
@@ -131,6 +119,43 @@ describe('world records', () => {
       const page = await repo.getAllPaginated(10, 0, { quality: ['good'] });
       expect(page.total).toBe(1);
       expect(page.rows[0].quality).toBe('good');
+    });
+  });
+
+  describe('upsert', () => {
+    test('a resubmission from a different guild updates the row and refreshes guild_id', async () => {
+      await addWorld('wrld_abc', 'guild-1', ['horror']);
+      const repo = new WorldRepository(queryable);
+
+      await repo.upsert({
+        worldId: 'wrld_abc',
+        guildId: 'guild-2',
+        messageId: '1260000000000000000',
+        name: 'Test World',
+        authorName: 'Test Author',
+        capacity: 16,
+        platforms: ['standalonewindows'],
+        tags: ['game'],
+        imageUrl: null,
+        sourceContent: null,
+        vrchatData: null,
+        packageSizes: [],
+        createdAt: 1717344000
+      });
+
+      const records = await queryable.query<{
+        world_id: string;
+        guild_id: string;
+        message_id: string;
+      }>(`SELECT world_id, guild_id, message_id FROM world_records`);
+      expect(records.rows).toEqual([
+        {
+          world_id: 'wrld_abc',
+          guild_id: 'guild-2',
+          message_id: '1260000000000000000'
+        }
+      ]);
+      expect((await repo.getByWorldId('wrld_abc'))?.tags).toEqual(['game']);
     });
   });
 });

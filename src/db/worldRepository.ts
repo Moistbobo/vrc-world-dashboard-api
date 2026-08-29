@@ -91,6 +91,7 @@ export class WorldRepository {
         ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, (EXTRACT(EPOCH FROM NOW()))::bigint), $13)
       ON CONFLICT(world_id) DO UPDATE SET
         guild_id = EXCLUDED.guild_id,
+        message_id = EXCLUDED.message_id,
         name = EXCLUDED.name,
         author_name = EXCLUDED.author_name,
         capacity = EXCLUDED.capacity,
@@ -335,9 +336,7 @@ export class WorldRepository {
     const sourceChanged = existing.sourceContent !== sourceContent;
 
     if (!tagsChanged && !sourceChanged) {
-      logger.debug(
-        `Skipping tag update for world ${worldId}: no changes`
-      );
+      logger.debug(`Skipping tag update for world ${worldId}: no changes`);
       return false;
     }
 
@@ -355,9 +354,7 @@ export class WorldRepository {
       }
     });
 
-    logger.info(
-      `Updated tags for world ${worldId}: [${tags.join(', ')}]`
-    );
+    logger.info(`Updated tags for world ${worldId}: [${tags.join(', ')}]`);
     return true;
   }
 
@@ -392,9 +389,7 @@ export class WorldRepository {
       await this.replaceTags(tx, worldId, tags, addedByTokenId);
     });
 
-    logger.info(
-      `Updated tags for world ${worldId}: [${tags.join(', ')}]`
-    );
+    logger.info(`Updated tags for world ${worldId}: [${tags.join(', ')}]`);
     return true;
   }
 

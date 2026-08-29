@@ -170,9 +170,10 @@ run('full smoke: tags catalog + world_tags junction', () => {
         vrchatData: null,
         packageSizes: []
       });
-      expect(
-        (await repo.getByWorldId('wrld_new'))?.tags
-      ).toEqual(['chill', 'horror']);
+      expect((await repo.getByWorldId('wrld_new'))?.tags).toEqual([
+        'chill',
+        'horror'
+      ]);
 
       await repo.upsert({
         worldId: 'wrld_new',
@@ -188,9 +189,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
         vrchatData: null,
         packageSizes: []
       });
-      expect(
-        (await repo.getByWorldId('wrld_new'))?.tags
-      ).toEqual(['game']);
+      expect((await repo.getByWorldId('wrld_new'))?.tags).toEqual(['game']);
     });
 
     it('records the curator token on tag edits and preserves order', async () => {
@@ -202,11 +201,16 @@ run('full smoke: tags catalog + world_tags junction', () => {
       const tokens = new TokenRepository(createQueryable(pool));
       const curatorRecord = (await tokens.findByName('smoke-curator'))!;
 
-      const updated = await repo.updateTagsOnly('wrld_kino', ['space', 'chill'], curatorRecord.id);
+      const updated = await repo.updateTagsOnly(
+        'wrld_kino',
+        ['space', 'chill'],
+        curatorRecord.id
+      );
       expect(updated).toBe(true);
-      expect(
-        (await repo.getByWorldId('wrld_kino'))?.tags
-      ).toEqual(['space', 'chill']);
+      expect((await repo.getByWorldId('wrld_kino'))?.tags).toEqual([
+        'space',
+        'chill'
+      ]);
 
       const q = createQueryable(pool);
       const rows = await q.query<{ tag: string; added_by_token_id: number }>(
