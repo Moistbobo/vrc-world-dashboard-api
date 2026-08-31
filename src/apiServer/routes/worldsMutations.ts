@@ -8,7 +8,6 @@ import { sanitizeRecord } from '../utils/sanitize';
 import {
   parseAddWorldBody,
   parseExtractWorldsBody,
-  parseGuildIdBody,
   parseUpdateQualityBody,
   parseUpdateTagsBody,
   parseUpdateTagsEditBody
@@ -81,17 +80,8 @@ router.delete(
   requirePermission('worlds:write'),
   async (request, response) => {
     const { worldId } = request.params as { worldId: string };
-    const body = parseGuildIdBody(request.body);
-    if (!body) {
-      return response
-        .status(400)
-        .send({ error: 'Invalid body. Expected { guildId }' });
-    }
 
-    const deleted = await getWorldRepository().deleteByWorldAndGuild(
-      worldId,
-      body.guildId
-    );
+    const deleted = await getWorldRepository().deleteByWorldId(worldId);
     if (!deleted) {
       return response.status(404).send({ error: 'World not found' });
     }
@@ -109,20 +99,16 @@ router.put(
     if (!body) {
       return response
         .status(400)
-        .send({ error: 'Invalid body. Expected { guildId, quality }' });
+        .send({ error: 'Invalid body. Expected { quality }' });
     }
 
     const repo = getWorldRepository();
-    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldId(worldId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
 
-    const updated = await repo.updateQuality(
-      worldId,
-      body.guildId,
-      body.quality
-    );
+    const updated = await repo.updateQuality(worldId, body.quality);
     response.send({ updated });
   }
 );
@@ -135,13 +121,13 @@ router.put(
     const { worldId } = request.params as { worldId: string };
     const body = parseUpdateTagsBody(request.body);
     if (!body) {
-      return response.status(400).send({
-        error: 'Invalid body. Expected { guildId, sourceContent }'
-      });
+      return response
+        .status(400)
+        .send({ error: 'Invalid body. Expected { sourceContent }' });
     }
 
     const repo = getWorldRepository();
-    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldId(worldId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
@@ -149,7 +135,6 @@ router.put(
     const tags = extractTags(body.tagSource ?? body.sourceContent ?? '');
     const updated = await repo.updateTags(
       worldId,
-      body.guildId,
       tags,
       body.sourceContent,
       request.token?.id
@@ -166,13 +151,13 @@ router.put(
     const { worldId } = request.params as { worldId: string };
     const body = parseUpdateTagsEditBody(request.body);
     if (!body) {
-      return response.status(400).send({
-        error: 'Invalid body. Expected { guildId, tags }'
-      });
+      return response
+        .status(400)
+        .send({ error: 'Invalid body. Expected { tags }' });
     }
 
     const repo = getWorldRepository();
-    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldId(worldId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
@@ -186,7 +171,6 @@ router.put(
 
     const updated = await repo.updateTagsOnly(
       worldId,
-      body.guildId,
       valid,
       request.token?.id
     );
@@ -200,22 +184,15 @@ router.put(
   requirePermission('worlds:write'),
   async (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
-    const body = parseGuildIdBody(request.body);
-    if (!body) {
-      return response
-        .status(400)
-        .send({ error: 'Invalid body. Expected { guildId }' });
-    }
 
     const repo = getWorldRepository();
-    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldId(worldId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
 
     const { added } = await getHighPriorityRepository().add(
       worldId,
-      body.guildId,
       request.token?.id
     );
     response.send({ added });
@@ -228,23 +205,14 @@ router.delete(
   requirePermission('worlds:write'),
   async (request, response) => {
     const { worldId } = request.params as { worldId: string };
-    const body = parseGuildIdBody(request.body);
-    if (!body) {
-      return response
-        .status(400)
-        .send({ error: 'Invalid body. Expected { guildId }' });
-    }
 
     const repo = getWorldRepository();
-    const exists = await repo.getByWorldAndGuild(worldId, body.guildId);
+    const exists = await repo.getByWorldId(worldId);
     if (!exists) {
       return response.status(404).send({ error: 'World not found' });
     }
 
-    const { removed } = await getHighPriorityRepository().remove(
-      worldId,
-      body.guildId
-    );
+    const { removed } = await getHighPriorityRepository().remove(worldId);
     response.send({ removed });
   }
 );
