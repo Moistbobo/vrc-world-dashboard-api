@@ -4,7 +4,9 @@ import { createApiServer } from './apiServer';
 import { runMigrations } from './db/schema';
 import { getQueryable } from './db/pool';
 import { getTagRepository } from './db/tagRepository';
+import { getFlagRepository } from './db/flagRepository';
 import { setTaxonomy } from './tags/extractor';
+import { setFlagTaxonomy } from './flags/taxonomy';
 import { ensureAuthenticated } from './vrchat/client';
 
 async function main() {
@@ -26,6 +28,15 @@ async function main() {
     );
   } catch (error) {
     logger.error('Failed to load canonical tags:', error);
+    process.exit(1);
+  }
+
+  try {
+    const catalogFlags = await getFlagRepository().getAll();
+    setFlagTaxonomy(catalogFlags);
+    logger.info(`Loaded ${catalogFlags.length} flags from the flags table`);
+  } catch (error) {
+    logger.error('Failed to load flags:', error);
     process.exit(1);
   }
 
