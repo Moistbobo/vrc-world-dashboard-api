@@ -12,6 +12,7 @@ export interface WorldRecord {
   capacity: number | null;
   platforms: string[];
   tags: string[];
+  flags?: string[];
   imageUrl: string | null;
   sourceContent: string | null;
   vrchatData: string | null;
@@ -53,6 +54,7 @@ function rowToRecord(row: WorldRow): WorldRecord {
     capacity: toNumberOrNull(row.capacity),
     platforms: toArray<string>(row.platforms),
     tags: toArray<string>(row.tags),
+    flags: [],
     imageUrl: row.image_url,
     sourceContent: row.source_content,
     vrchatData: row.vrchat_data,
@@ -196,7 +198,10 @@ export class WorldRepository {
     `;
     const result = await this.db.query<WorldRow>(sql, [worldId]);
     const record = result.rows[0] ? rowToRecord(result.rows[0]) : undefined;
-    return record ? (await this.attachTags([record]))[0] : undefined;
+    if (!record) {
+      return undefined;
+    }
+    return (await this.attachFlags(await this.attachTags([record])))[0];
   }
 
   /**
@@ -231,6 +236,42 @@ export class WorldRepository {
     }
     for (const record of records) {
       record.tags = byKey.get(record.worldId) ?? [];
+    }
+    return records;
+  }
+
+  /**
+   * Attach each record's flags from the world_flags junction, ordered by flag.
+   * Runs one batched query per distinct world_id instead of a per-row
+   * correlated subquery, so it works on both pg-mem and real Postgres.
+   */
+  private async attachFlags(records: WorldRecord[]): Promise<WorldRecord[]> {
+    if (records.length === 0) {
+      return records;
+    }
+    const worldIds = [...new Set(records.map((r) => r.worldId))];
+    const placeholders = worldIds.map((_, i) => `$${i + 1}`).join(', ');
+    const result = await this.db.query<{
+      world_id: string;
+      flag: string;
+    }>(
+      `SELECT wf.world_id, wf.flag
+       FROM world_flags wf
+       WHERE wf.world_id IN (${placeholders})
+       ORDER BY wf.world_id, wf.flag`,
+      worldIds
+    );
+    const byKey = new Map<string, string[]>();
+    for (const row of result.rows) {
+      const arr = byKey.get(row.world_id);
+      if (arr) {
+        arr.push(row.flag);
+      } else {
+        byKey.set(row.world_id, [row.flag]);
+      }
+    }
+    for (const record of records) {
+      record.flags = byKey.get(record.worldId) ?? [];
     }
     return records;
   }
@@ -405,6 +446,7 @@ export class WorldRepository {
 
   private buildWhereClause(filters?: {
     tags?: string[];
+    excludeFlags?: string[];
     platforms?: string[];
     guildId?: string;
     quality?: ('good' | 'bad')[];
@@ -447,6 +489,19 @@ export class WorldRepository {
         const p = params.length;
         whereParts.push(
           `EXISTS (SELECT 1 FROM world_tags wt WHERE wt.world_id = wr.world_id AND wt.tag = $${p})`
+        );
+      }
+    }
+
+    if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
+      for (const flag of filters.excludeFlags) {
+        params.push(flag);
+        const p = params.length;
+        // Equivalent to NOT EXISTS (... AND flag = $p); written as NOT IN
+        // because pg-mem cannot parse NOT EXISTS subqueries. `flag` is NOT
+        // NULL, so no NULL could poison the comparison.
+        whereParts.push(
+          `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
         );
       }
     }
@@ -516,6 +571,7 @@ export class WorldRepository {
     offset: number,
     filters?: {
       tags?: string[];
+      excludeFlags?: string[];
       platforms?: string[];
       guildId?: string;
       quality?: ('good' | 'bad')[];
@@ -552,7 +608,9 @@ export class WorldRepository {
     ]);
 
     return {
-      rows: await this.attachTags(selectResult.rows.map(rowToRecord)),
+      rows: await this.attachFlags(
+        await this.attachTags(selectResult.rows.map(rowToRecord))
+      ),
       total
     };
   }

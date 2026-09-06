@@ -24,6 +24,7 @@ export function sanitizeRecord(
     platforms: raw.platforms,
     packageSizes: raw.packageSizes,
     tags: raw.tags,
+    flags: raw.flags ?? [],
     imageUrl: raw.imageUrl,
     vrchatUrl: buildWorldUrl(raw.worldId),
     ...(options?.includeQuality === true && {

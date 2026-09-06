@@ -152,6 +152,7 @@ Returns a paginated, filterable list of world records.
 | `limit`       | number            | `50`    | 500 | Number of records to return. |
 | `offset`      | number            | `0`     | —   | Number of records to skip (for pagination). |
 | `tag`         | string / string[] | —       | —   | Filter by tag(s). Comma-separated or repeated. Multiple values use AND logic. |
+| `exclude`     | string / string[] | —       | —   | Hide worlds carrying any of the given flag(s). Comma-separated or repeated. Multiple values use AND logic (each adds its own exclusion). Available to all `worlds:read` tokens. |
 | `platform`    | string / string[] | —       | —   | Filter by supported platform(s). Comma-separated or repeated. Multiple values use AND logic. |
 | `quality`     | string / string[] | —       | —   | Filter by quality. Values: `good`, `bad`. |
 | `search`      | string            | —       | —   | Search across name, author, source content, world id, and tags. |
@@ -176,6 +177,7 @@ Returns a paginated, filterable list of world records.
       "capacity": 40,
       "platforms": ["android", "standalonewindows"],
       "tags": ["social", "hangout", "bar"],
+      "flags": ["furry", "AI slop"],
       "imageUrl": "https://api.vrchat.cloud/api/1/file/...",
       "vrchatUrl": "https://vrchat.com/home/world/wrld_abc123",
       "quality": "good",
@@ -188,13 +190,14 @@ Returns a paginated, filterable list of world records.
 
 The `quality`, `highPriority`, and `guildId` fields are present only for
 tokens with the `worlds:write` permission; viewer tokens receive the record
-without them.
+without them. The `flags` field is present for all tokens.
 
 All filters combine with AND logic. Example:
 
 ```
 GET /api/worlds?minCapacity=10&maxCapacity=40&quality=good&tag=horror&platform=android
 GET /api/worlds?dayRange=7&tag=horror&quality=good
+GET /api/worlds?exclude=furry&exclude=AI slop
 ```
 
 ---
@@ -250,7 +253,8 @@ GET /api/worlds/:worldId
 
 Returns the most recent record for a specific VRChat world ID. The
 `quality`, `highPriority`, and `guildId` fields follow the same rule as
-`GET /api/worlds`: present only for tokens with `worlds:write`.
+`GET /api/worlds`: present only for tokens with `worlds:write`. The `flags`
+field is present for all tokens.
 
 **Path parameter**
 
@@ -783,6 +787,7 @@ Each world object returned by the API has the following fields:
 | `platforms`       | string[]                 | Supported platforms (`android`, `standalonewindows`, etc.). |
 | `packageSizes`    | (number \| null)[]       | Download size in MB per platform, aligned 1:1 with `platforms`. `null` when the size could not be determined. |
 | `tags`            | string[]                 | Tags applied to this world record. |
+| `flags`           | string[]                 | Flags applied to this world (empty array when none). Visible to all tokens. |
 | `imageUrl`        | string \| null           | Thumbnail image URL from VRChat API. |
 | `vrchatUrl`       | string                   | Link to the world on the VRChat website. |
 | `quality`         | `"good"` \| `"bad"` \| null | Manual quality rating (if set). Present only for tokens with `worlds:write`. |

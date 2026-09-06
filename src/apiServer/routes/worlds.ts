@@ -24,6 +24,7 @@ router.get(
     const tags = parseStringListQuery(query.tag);
     const platforms = parseStringListQuery(query.platform);
     const worldIds = parseStringListQuery(query.worldId);
+    const excludeFlags = parseStringListQuery(query.exclude);
 
     const quality = Array.isArray(query.quality)
       ? query.quality
@@ -78,6 +79,7 @@ router.get(
     const filters: {
       platforms?: string[];
       tags?: string[];
+      excludeFlags?: string[];
       quality?: ('good' | 'bad')[];
       search?: string;
       minCapacity?: number;
@@ -87,6 +89,7 @@ router.get(
       highPriorityOnly?: boolean;
     } = {};
     if (tags) filters.tags = tags;
+    if (excludeFlags) filters.excludeFlags = excludeFlags;
     if (platforms) filters.platforms = platforms;
     if (worldIds) filters.worldIds = worldIds;
     if (quality) filters.quality = quality;
