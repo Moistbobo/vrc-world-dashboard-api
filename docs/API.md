@@ -774,6 +774,41 @@ flags. No-op when the flag set is unchanged.
 
 ---
 
+### 18. List Flag Counts
+
+```
+GET /api/flags
+```
+
+Returns every flag in the `flags` catalog (curator-set "bad/negative"
+markers like `furry`, `booth slop`) with a count of how many world records
+carry it. Unused catalog flags are included with a count of `0`. Flags are
+sorted by count descending, ties resolved alphabetically. Unlike
+`GET /api/tags`, no emoji or hex color metadata is included.
+
+Requires the `tags:read` permission (same gate as `GET /api/tags`).
+
+**Response**
+
+```json
+{
+  "flags": [
+    { "flag": "furry", "count": 12 },
+    { "flag": "booth slop", "count": 4 },
+    { "flag": "sleepy", "count": 0 }
+  ]
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `401`  | `{ "error": "Unauthorized" }` |
+| `403`  | `{ "error": "Forbidden" }` |
+
+---
+
 ## World Record Schema
 
 Each world object returned by the API has the following fields:

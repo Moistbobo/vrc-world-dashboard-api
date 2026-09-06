@@ -21,6 +21,10 @@ vi.mock('../db/tagRepository', () => ({
   getTagRepository: vi.fn()
 }));
 
+vi.mock('../db/flagRepository', () => ({
+  getFlagRepository: vi.fn()
+}));
+
 vi.mock('../db/tokenRepository', () => ({
   __esModule: true,
   getTokenRepository: vi.fn(),
@@ -48,6 +52,7 @@ vi.mock('../vrchat/client', () => ({
 import { getWorldRepository } from '../db/worldRepository';
 import { getTokenRepository } from '../db/tokenRepository';
 import { getTagRepository } from '../db/tagRepository';
+import { getFlagRepository } from '../db/flagRepository';
 import { TAG_SEED } from '../db/tagSeed';
 import { searchWorldsByName } from '../vrchat/client';
 import { createApiServer } from './index';
@@ -579,6 +584,73 @@ describe('API Server', () => {
         emoji: '❓',
         hexColor: '#94a3b8'
       });
+    });
+  });
+
+  describe('GET /api/flags', () => {
+    it('returns seeded counts and backfills unused catalog flags at zero', async () => {
+      asMock(getFlagRepository).mockReturnValue({
+        getAll: vi.fn(async () => ['furry', 'booth slop', 'sleepy']),
+        countByFlag: vi.fn(async () => [
+          { flag: 'furry', count: 12 },
+          { flag: 'booth slop', count: 4 }
+        ])
+      });
+
+      const response = await request(app)
+        .get('/api/flags')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        flags: [
+          { flag: 'furry', count: 12 },
+          { flag: 'booth slop', count: 4 },
+          { flag: 'sleepy', count: 0 }
+        ]
+      });
+    });
+
+    it('sorts by count descending with alphabetical ties', async () => {
+      asMock(getFlagRepository).mockReturnValue({
+        getAll: vi.fn(async () => ['alpha', 'beta', 'gamma', 'delta']),
+        countByFlag: vi.fn(async () => [
+          { flag: 'alpha', count: 3 },
+          { flag: 'beta', count: 3 },
+          { flag: 'gamma', count: 1 }
+        ])
+      });
+
+      const response = await request(app)
+        .get('/api/flags')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.body.flags.map((f: { flag: string }) => f.flag)).toEqual([
+        'alpha',
+        'beta',
+        'gamma',
+        'delta'
+      ]);
+    });
+
+    it('returns 401 without a token', async () => {
+      const response = await request(app).get('/api/flags');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ error: 'Unauthorized' });
+    });
+
+    it('returns 403 for a token lacking tags:read', async () => {
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/flags')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ error: 'Forbidden' });
     });
   });
 
