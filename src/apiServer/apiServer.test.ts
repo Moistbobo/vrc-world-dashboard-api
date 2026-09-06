@@ -346,6 +346,63 @@ describe('API Server', () => {
         expect.objectContaining({ dayRange: 7 })
       );
     });
+
+    it('passes exclude flags to repository and is allowed for viewer tokens', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read', 'tags:read', 'meta:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?exclude=furry')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({ excludeFlags: ['furry'] })
+      );
+    });
+
+    it('parses repeated and comma-separated exclude values', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      await request(app)
+        .get('/api/worlds?exclude=furry&exclude=AI%20slop')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({ excludeFlags: ['furry', 'AI slop'] })
+      );
+    });
+
+    it('returns flags on list and detail responses for viewer tokens', async () => {
+      asMock(getWorldRepository).mockReturnValue(createMockRepo());
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read', 'tags:read', 'meta:read'])
+      );
+
+      const list = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
+      expect(list.status).toBe(200);
+      expect(list.body.worlds[0].flags).toEqual([]);
+
+      const detail = await request(app)
+        .get('/api/worlds/wrld_abc123')
+        .set('authorization', 'Bearer test-token');
+      expect(detail.status).toBe(200);
+      expect(detail.body.flags).toEqual([]);
+    });
   });
 
   describe('GET /api/worlds/:worldId', () => {

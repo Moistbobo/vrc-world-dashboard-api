@@ -1,6 +1,7 @@
 import { runMigrations } from './schema';
 import { createTestDb, type TestDb } from './testUtils';
 import { WorldRepository } from './worldRepository';
+import { FlagRepository } from './flagRepository';
 
 describe('world records', () => {
   let queryable: TestDb['queryable'];
@@ -119,6 +120,61 @@ describe('world records', () => {
       const page = await repo.getAllPaginated(10, 0, { quality: ['good'] });
       expect(page.total).toBe(1);
       expect(page.rows[0].quality).toBe('good');
+    });
+  });
+
+  describe('flags on reads', () => {
+    test('attachFlags returns flags ordered by flag and empty when none', async () => {
+      await addWorld('wrld_abc', 'guild-1');
+      await addWorld('wrld_def', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      const flags = new FlagRepository(queryable);
+      await flags.replaceWorldFlags('wrld_abc', ['furry', 'AI slop']);
+
+      const record = (await repo.getByWorldId('wrld_abc'))!;
+      expect(record.flags).toEqual(['AI slop', 'furry']);
+      expect((await repo.getByWorldId('wrld_def'))!.flags).toEqual([]);
+    });
+
+    test('getAllPaginated attaches flags to every row', async () => {
+      await addWorld('wrld_abc', 'guild-1');
+      await addWorld('wrld_def', 'guild-1');
+      await new FlagRepository(queryable).replaceWorldFlags('wrld_abc', [
+        'furry'
+      ]);
+      const repo = new WorldRepository(queryable);
+
+      const page = await repo.getAllPaginated(10, 0);
+      const byId = new Map(page.rows.map((r) => [r.worldId, r.flags]));
+      expect(byId.get('wrld_abc')).toEqual(['furry']);
+      expect(byId.get('wrld_def')).toEqual([]);
+    });
+  });
+
+  describe('getAllPaginated excludeFlags', () => {
+    test('hides worlds carrying any of the given flags (AND-combined NOT EXISTS)', async () => {
+      await addWorld('wrld_furry', 'guild-1');
+      await addWorld('wrld_slop', 'guild-1');
+      await addWorld('wrld_clean', 'guild-1');
+      const flags = new FlagRepository(queryable);
+      await flags.replaceWorldFlags('wrld_furry', ['furry']);
+      await flags.replaceWorldFlags('wrld_slop', ['AI slop']);
+      const repo = new WorldRepository(queryable);
+
+      const single = await repo.getAllPaginated(10, 0, {
+        excludeFlags: ['furry']
+      });
+      expect(single.total).toBe(2);
+      expect(single.rows.map((r) => r.worldId).sort()).toEqual([
+        'wrld_clean',
+        'wrld_slop'
+      ]);
+
+      const multi = await repo.getAllPaginated(10, 0, {
+        excludeFlags: ['furry', 'AI slop']
+      });
+      expect(multi.total).toBe(1);
+      expect(multi.rows.map((r) => r.worldId)).toEqual(['wrld_clean']);
     });
   });
 
