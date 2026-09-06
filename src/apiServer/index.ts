@@ -3,6 +3,7 @@ import Config from '../config';
 import healthRoute from './routes/health';
 import worldsRoute from './routes/worlds';
 import tagsRoute from './routes/tags';
+import flagsRoute from './routes/flags';
 import metaRoute from './routes/meta';
 import worldsMutationsRoute from './routes/worldsMutations';
 import meRoute from './routes/me';
@@ -121,6 +122,7 @@ export function createApiServer(): Express {
   app.use(worldsMutationsRoute);
   app.use(meRoute);
   app.use(tagsRoute);
+  app.use(flagsRoute);
   app.use(metaRoute);
 
   app.use(notFoundHandler);
