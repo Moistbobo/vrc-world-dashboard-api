@@ -55,6 +55,14 @@ vi.mock('../tags/extractor', () => ({
   validateTags: vi.fn()
 }));
 
+vi.mock('../flags/taxonomy', () => ({
+  validateFlags: vi.fn()
+}));
+
+vi.mock('../db/flagRepository', () => ({
+  getFlagRepository: vi.fn()
+}));
+
 vi.mock('../vrchat/client', () => ({
   fetchWorldData: vi.fn(),
   isCurrentUser: vi.fn(),
@@ -67,6 +75,8 @@ import { getTokenRepository } from '../db/tokenRepository';
 import { addWorld, WorldServiceError } from '../worlds/service';
 import { extractAllWorldIdsFromMessage } from '../extraction/pipeline';
 import { extractTags, validateTags } from '../tags/extractor';
+import { validateFlags } from '../flags/taxonomy';
+import { getFlagRepository } from '../db/flagRepository';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
@@ -707,6 +717,157 @@ describe('API mutations', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ updated: false, tags: ['horror'] });
+    });
+  });
+
+  describe('PUT /api/worlds/:worldId/flags/edit', () => {
+    const tagsWritePermissions = [
+      'worlds:read',
+      'tags:read',
+      'meta:read',
+      'worlds:write',
+      'tags:write'
+    ];
+
+    it('returns 401 without a token', async () => {
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .send({ flags: ['furry'] });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('returns 403 when the token lacks tags:write', async () => {
+      mockTokenRepo(['worlds:read', 'tags:read', 'meta:read', 'worlds:write']);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ flags: ['furry'] });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ error: 'Forbidden' });
+    });
+
+    it('returns 400 when flags is missing', async () => {
+      mockTokenRepo(tagsWritePermissions);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1' });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: 'Invalid body. Expected { flags }'
+      });
+    });
+
+    it('returns 400 when flags is not an array', async () => {
+      mockTokenRepo(tagsWritePermissions);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ flags: 'furry' });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('returns 400 when flags contains a non-string entry', async () => {
+      mockTokenRepo(tagsWritePermissions);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ flags: ['furry', 5] });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('returns 404 when world does not exist', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getByWorldId: vi.fn(() => undefined) })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ flags: ['furry'] });
+
+      expect(response.status).toBe(404);
+    });
+
+    it('returns 400 listing invalid flags', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(validateFlags).mockReturnValue({
+        valid: [],
+        invalid: ['nope', 'also-nope']
+      });
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getByWorldId: vi.fn(() => ({})) })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ flags: ['nope', 'also-nope'] });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: 'Invalid flags: nope, also-nope'
+      });
+    });
+
+    it('returns 200 with updated: true and passes canonical flags to the repo', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(validateFlags).mockReturnValue({
+        valid: ['furry', 'booth slop'],
+        invalid: []
+      });
+      const replaceWorldFlags = vi.fn(() => true);
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getByWorldId: vi.fn(() => ({})) })
+      );
+      asMock(getFlagRepository).mockReturnValue({
+        replaceWorldFlags
+      } as never);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', flags: ['Furry', ' booth slop '] });
+
+      expect(response.status).toBe(200);
+      expect(replaceWorldFlags).toHaveBeenCalledWith(
+        VALID_BODY.worldId,
+        ['furry', 'booth slop'],
+        1
+      );
+      expect(response.body).toEqual({
+        updated: true,
+        flags: ['furry', 'booth slop']
+      });
+    });
+
+    it('returns 200 with updated: false when flags are unchanged', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(validateFlags).mockReturnValue({ valid: ['furry'], invalid: [] });
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getByWorldId: vi.fn(() => ({})) })
+      );
+      asMock(getFlagRepository).mockReturnValue({
+        replaceWorldFlags: vi.fn(() => false)
+      } as never);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ flags: ['furry'] });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ updated: false, flags: ['furry'] });
     });
   });
 

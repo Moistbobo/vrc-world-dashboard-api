@@ -22,6 +22,10 @@ export interface UpdateTagsEditBody {
   tags: string[];
 }
 
+export interface UpdateFlagsEditBody {
+  flags: string[];
+}
+
 export interface ExtractWorldsBody {
   content: string;
 }
@@ -134,4 +138,13 @@ export function parseUpdateTagsEditBody(
   if (!Array.isArray(body.tags)) return null;
   if (!body.tags.every((value) => typeof value === 'string')) return null;
   return { tags: body.tags as string[] };
+}
+
+export function parseUpdateFlagsEditBody(
+  body: unknown
+): UpdateFlagsEditBody | null {
+  if (!isObject(body)) return null;
+  if (!Array.isArray(body.flags)) return null;
+  if (!body.flags.every((value) => typeof value === 'string')) return null;
+  return { flags: body.flags as string[] };
 }

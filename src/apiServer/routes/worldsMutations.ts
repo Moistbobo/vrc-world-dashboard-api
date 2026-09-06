@@ -4,13 +4,16 @@ import { getHighPriorityRepository } from '../../db/highPriorityRepository';
 import { addWorld, WorldServiceError } from '../../worlds/service';
 import { extractAllWorldIdsFromMessage } from '../../extraction/pipeline';
 import { extractTags, validateTags } from '../../tags/extractor';
+import { validateFlags } from '../../flags/taxonomy';
+import { getFlagRepository } from '../../db/flagRepository';
 import { sanitizeRecord } from '../utils/sanitize';
 import {
   parseAddWorldBody,
   parseExtractWorldsBody,
   parseUpdateQualityBody,
   parseUpdateTagsBody,
-  parseUpdateTagsEditBody
+  parseUpdateTagsEditBody,
+  parseUpdateFlagsEditBody
 } from '../utils/validation';
 import { requirePermission, type TokenRequest } from '../middleware/auth';
 
@@ -175,6 +178,41 @@ router.put(
       request.token?.id
     );
     response.send({ updated, tags: valid });
+  }
+);
+
+// PUT /api/worlds/:worldId/flags/edit
+router.put(
+  '/api/worlds/:worldId/flags/edit',
+  requirePermission('tags:write'),
+  async (request: TokenRequest, response) => {
+    const { worldId } = request.params as { worldId: string };
+    const body = parseUpdateFlagsEditBody(request.body);
+    if (!body) {
+      return response
+        .status(400)
+        .send({ error: 'Invalid body. Expected { flags }' });
+    }
+
+    const repo = getWorldRepository();
+    const exists = await repo.getByWorldId(worldId);
+    if (!exists) {
+      return response.status(404).send({ error: 'World not found' });
+    }
+
+    const { valid, invalid } = validateFlags(body.flags);
+    if (invalid.length > 0) {
+      return response.status(400).send({
+        error: `Invalid flags: ${invalid.join(', ')}`
+      });
+    }
+
+    const updated = await getFlagRepository().replaceWorldFlags(
+      worldId,
+      valid,
+      request.token?.id
+    );
+    response.send({ updated, flags: valid });
   }
 );
 

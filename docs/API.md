@@ -721,6 +721,55 @@ world's tags. No-op when the tags are unchanged.
 
 ---
 
+### 17. Edit World Flags
+
+```
+PUT /api/worlds/:worldId/flags/edit
+```
+
+Replaces the world's full flag set (curator-set "bad/negative" markers like
+`furry`, `booth slop`). Requires the `tags:write` permission (held by
+`curator` and `admin` roles). A `guildId` in the body is accepted and ignored.
+
+Flags are a separate classification from the automatically-extracted tags and
+are edited through this endpoint, not `PUT /api/worlds/:worldId/tags/edit`.
+Each side is atomic on its own; a curator changing both sends two calls.
+
+Flags are validated against the flag catalog (loaded from the `flags` table at
+boot); canonical spellings are resolved server-side. Unknown flags cause a
+`400` naming the invalid values. An empty `flags` array clears the world's
+flags. No-op when the flag set is unchanged.
+
+**Request body**
+
+```json
+{
+  "guildId": "123456789012345678",
+  "flags": ["furry", "booth slop"]
+}
+```
+
+**Success** — status `200`:
+
+```json
+{
+  "updated": true,
+  "flags": ["furry", "booth slop"]
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `400`  | `{ "error": "Invalid body. Expected { flags }" }` |
+| `400`  | `{ "error": "Invalid flags: <unknown flags>" }` |
+| `401`  | `{ "error": "Unauthorized" }` |
+| `403`  | `{ "error": "Forbidden" }` |
+| `404`  | `{ "error": "World not found" }` |
+
+---
+
 ## World Record Schema
 
 Each world object returned by the API has the following fields:
@@ -825,6 +874,12 @@ curl -X PUT -H "Authorization: Bearer my-token" \
   -H "Content-Type: application/json" \
   -d '{"tags": ["horror", "game"]}' \
   http://localhost:3000/api/worlds/wrld_abc123/tags/edit
+
+# Edit flags directly (tags:write token required; flags validated against the catalog)
+curl -X PUT -H "Authorization: Bearer my-token" \
+  -H "Content-Type: application/json" \
+  -d '{"flags": ["furry", "booth slop"]}' \
+  http://localhost:3000/api/worlds/wrld_abc123/flags/edit
 
 # Extract world IDs from message content (Twitter/X resolution included)
 curl -X POST -H "Authorization: Bearer my-token" \
