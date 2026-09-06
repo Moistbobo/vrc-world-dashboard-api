@@ -1,6 +1,7 @@
 import type { Queryable } from './client';
 import logger from '../logger';
 import { TAG_SEED } from './tagSeed';
+import { FLAG_SEED } from './flagSeed';
 
 interface Migration {
   name: string;
@@ -382,6 +383,43 @@ export const MIGRATIONS: Migration[] = [
       );
       await db.query(
         `CREATE INDEX IF NOT EXISTS idx_world_tags_tag ON world_tags(tag)`
+      );
+    }
+  },
+  {
+    name: '014_create_flags',
+    run: async (db) => {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS flags (
+          flag                text   PRIMARY KEY,
+          created_by_token_id bigint REFERENCES api_tokens(id) ON DELETE SET NULL,
+          created_at          bigint NOT NULL DEFAULT ${EPOCH_NOW}
+        );
+      `);
+      const placeholders = FLAG_SEED.map((_, i) => `($${i + 1})`).join(', ');
+      await db.query(
+        `INSERT INTO flags (flag) VALUES ${placeholders}
+         ON CONFLICT (flag) DO NOTHING`,
+        FLAG_SEED
+      );
+    }
+  },
+  {
+    name: '015_create_world_flags',
+    run: async (db) => {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS world_flags (
+          world_id          text   NOT NULL,
+          flag              text   NOT NULL REFERENCES flags(flag),
+          added_by_token_id bigint REFERENCES api_tokens(id) ON DELETE SET NULL,
+          added_at          bigint NOT NULL DEFAULT ${EPOCH_NOW},
+          PRIMARY KEY (world_id, flag),
+          FOREIGN KEY (world_id)
+            REFERENCES world_records(world_id) ON DELETE CASCADE
+        );
+      `);
+      await db.query(
+        `CREATE INDEX IF NOT EXISTS idx_world_flags_flag ON world_flags(flag)`
       );
     }
   }
