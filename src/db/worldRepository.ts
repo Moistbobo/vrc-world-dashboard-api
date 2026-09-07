@@ -485,33 +485,40 @@ export class WorldRepository {
     }
 
     if (filters?.tags && filters.tags.length > 0) {
-      for (const tag of filters.tags) {
-        params.push(tag);
-        const p = params.length;
-        whereParts.push(
-          `EXISTS (SELECT 1 FROM world_tags wt WHERE wt.world_id = wr.world_id AND wt.tag = $${p})`
-        );
-      }
+      const uniqueTags = [...new Set(filters.tags)];
+      const start = params.length;
+      const placeholders = uniqueTags
+        .map((_, i) => `$${start + i + 1}`)
+        .join(', ');
+      params.push(...uniqueTags);
+      params.push(uniqueTags.length);
+      // worlds whose junction rows cover every selected tag. COUNT(*) works
+      // because (world_id, tag) is the world_tags primary key, so duplicates
+      // cannot inflate the count.
+      whereParts.push(
+        `wr.world_id IN (SELECT s.world_id FROM (SELECT wt.world_id, COUNT(*) c FROM world_tags wt WHERE wt.tag IN (${placeholders}) GROUP BY wt.world_id) s WHERE s.c = $${start + uniqueTags.length + 1})`
+      );
     }
 
     if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
-      if (filters.flagMode === 'include') {
-        for (const flag of filters.excludeFlags) {
-          params.push(flag);
-          const p = params.length;
+      if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
+        const uniqueFlags = [...new Set(filters.excludeFlags)];
+        const start = params.length;
+        const placeholders = uniqueFlags
+          .map((_, i) => `$${start + i + 1}`)
+          .join(', ');
+        params.push(...uniqueFlags);
+        if (filters.flagMode === 'include') {
+          params.push(uniqueFlags.length);
+          // worlds whose flag rows cover every selected flag. COUNT(*) works
+          // because (world_id, flag) is the world_flags primary key, so
+          // duplicates cannot inflate the count.
           whereParts.push(
-            `wr.world_id IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
+            `wr.world_id IN (SELECT s.world_id FROM (SELECT wf.world_id, COUNT(*) c FROM world_flags wf WHERE wf.flag IN (${placeholders}) GROUP BY wf.world_id) s WHERE s.c = $${start + uniqueFlags.length + 1})`
           );
-        }
-      } else {
-        for (const flag of filters.excludeFlags) {
-          params.push(flag);
-          const p = params.length;
-          // Equivalent to NOT EXISTS (... AND flag = $p); written as NOT IN
-          // because pg-mem cannot parse NOT EXISTS subqueries. `flag` is NOT
-          // NULL, so no NULL could poison the comparison.
+        } else {
           whereParts.push(
-            `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
+            `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag IN (${placeholders}))`
           );
         }
       }
@@ -597,12 +604,7 @@ export class WorldRepository {
   ): Promise<{ rows: WorldRecord[]; total: number }> {
     const { whereClause, params } = this.buildWhereClause(filters);
 
-    const countResult = await this.db.query<{ total: number }>(
-      `SELECT COUNT(*)::int as total FROM world_records wr ${whereClause}`,
-      params
-    );
-    const total = countResult.rows[0]?.total ?? 0;
-
+    const countSql = `SELECT COUNT(*)::int as total FROM world_records wr ${whereClause}`;
     const selectSql = `
       SELECT wr.*, (hp.world_id IS NOT NULL) AS high_priority
       FROM world_records wr
@@ -613,11 +615,12 @@ export class WorldRepository {
         params.length + 1
       } OFFSET $${params.length + 2}
     `;
-    const selectResult = await this.db.query<WorldRow>(selectSql, [
-      ...params,
-      limit,
-      offset
+
+    const [countResult, selectResult] = await Promise.all([
+      this.db.query<{ total: number }>(countSql, params),
+      this.db.query<WorldRow>(selectSql, [...params, limit, offset])
     ]);
+    const total = countResult.rows[0]?.total ?? 0;
 
     return {
       rows: await this.attachFlags(

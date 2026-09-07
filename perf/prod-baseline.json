@@ -1,0 +1,209 @@
+{
+  "generatedAt": "2026-09-07T08:41:43.398Z",
+  "base": "https://api.testnet.googoogaagaa.club",
+  "note": "GET-only probe against prod API, mirrors dashboard request shape",
+  "summary": {
+    "tags=0": {
+      "reps": 2,
+      "p50": 458.78549999999996,
+      "max": 494.99524999999994,
+      "totals": [6981, 6981]
+    },
+    "tags=2": {
+      "reps": 2,
+      "p50": 462.33087500000056,
+      "max": 474.1070829999999,
+      "totals": [901, 901]
+    },
+    "tags=4": {
+      "reps": 2,
+      "p50": 251.26254199999948,
+      "max": 269.75533300000006,
+      "totals": [2, 2]
+    },
+    "tags=8": {
+      "reps": 2,
+      "p50": 404.13695800000005,
+      "max": 422.83320900000035,
+      "totals": [0, 0]
+    },
+    "tags=12": {
+      "reps": 2,
+      "p50": 358.8472500000007,
+      "max": 504.3534580000005,
+      "totals": [0, 0]
+    },
+    "tags=16": {
+      "reps": 2,
+      "p50": 553.2345829999995,
+      "max": 567.8307079999995,
+      "totals": [0, 0]
+    },
+    "tags=20": {
+      "reps": 2,
+      "p50": 783.1161249999986,
+      "max": 849.4705419999991,
+      "totals": [0, 0]
+    },
+    "combined 20 tags + 5 flags + platform + dayRange": {
+      "reps": 2,
+      "p50": 733.3880410000002,
+      "max": 742.4821250000005,
+      "totals": [0, 0]
+    },
+    "search=\"a\"": {
+      "reps": 2,
+      "p50": 528.3873750000002,
+      "max": 586.662875,
+      "totals": [6943, 6943]
+    },
+    "20 tags + search=\"a\"": {
+      "reps": 2,
+      "p50": 667.3509999999987,
+      "max": 791.9552499999991,
+      "totals": [0, 0]
+    }
+  },
+  "results": [
+    {
+      "config": "tags=0",
+      "rep": 0,
+      "elapsed_ms": 458.78549999999996,
+      "total": 6981,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=0",
+      "rep": 1,
+      "elapsed_ms": 494.99524999999994,
+      "total": 6981,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=2",
+      "rep": 0,
+      "elapsed_ms": 474.1070829999999,
+      "total": 901,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=2",
+      "rep": 1,
+      "elapsed_ms": 462.33087500000056,
+      "total": 901,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=4",
+      "rep": 0,
+      "elapsed_ms": 251.26254199999948,
+      "total": 2,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=4",
+      "rep": 1,
+      "elapsed_ms": 269.75533300000006,
+      "total": 2,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=8",
+      "rep": 0,
+      "elapsed_ms": 404.13695800000005,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=8",
+      "rep": 1,
+      "elapsed_ms": 422.83320900000035,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=12",
+      "rep": 0,
+      "elapsed_ms": 358.8472500000007,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=12",
+      "rep": 1,
+      "elapsed_ms": 504.3534580000005,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=16",
+      "rep": 0,
+      "elapsed_ms": 553.2345829999995,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&tag=horror&tag=gallery&tag=puzzle&tag=moon&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=16",
+      "rep": 1,
+      "elapsed_ms": 567.8307079999995,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&tag=horror&tag=gallery&tag=puzzle&tag=moon&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=20",
+      "rep": 0,
+      "elapsed_ms": 783.1161249999986,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&tag=horror&tag=gallery&tag=puzzle&tag=moon&tag=night&tag=liminal&tag=day&tag=dusk&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "tags=20",
+      "rep": 1,
+      "elapsed_ms": 849.4705419999991,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&tag=horror&tag=gallery&tag=puzzle&tag=moon&tag=night&tag=liminal&tag=day&tag=dusk&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "combined 20 tags + 5 flags + platform + dayRange",
+      "rep": 0,
+      "elapsed_ms": 733.3880410000002,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&tag=horror&tag=gallery&tag=puzzle&tag=moon&tag=night&tag=liminal&tag=day&tag=dusk&exclude=AI%20slop&exclude=booth%20slop&exclude=furry&exclude=poor%20performance&exclude=low%20quality&platform=vrchat&dayRange=30&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "combined 20 tags + 5 flags + platform + dayRange",
+      "rep": 1,
+      "elapsed_ms": 742.4821250000005,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&tag=horror&tag=gallery&tag=puzzle&tag=moon&tag=night&tag=liminal&tag=day&tag=dusk&exclude=AI%20slop&exclude=booth%20slop&exclude=furry&exclude=poor%20performance&exclude=low%20quality&platform=vrchat&dayRange=30&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "search=\"a\"",
+      "rep": 0,
+      "elapsed_ms": 586.662875,
+      "total": 6943,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&search=a&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "search=\"a\"",
+      "rep": 1,
+      "elapsed_ms": 528.3873750000002,
+      "total": 6943,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&search=a&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "20 tags + search=\"a\"",
+      "rep": 0,
+      "elapsed_ms": 791.9552499999991,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&tag=horror&tag=gallery&tag=puzzle&tag=moon&tag=night&tag=liminal&tag=day&tag=dusk&search=a&minCapacity=1&maxCapacity=80"
+    },
+    {
+      "config": "20 tags + search=\"a\"",
+      "rep": 1,
+      "elapsed_ms": 667.3509999999987,
+      "total": 0,
+      "url": "https://api.testnet.googoogaagaa.club/api/worlds?limit=50&offset=0&tag=gamerip&tag=kino&tag=chill&tag=nature&tag=game&tag=meme&tag=tech&tag=portal&tag=adventure&tag=driving&tag=particle%20live%20%2F%20vrmv&tag=comfy&tag=horror&tag=gallery&tag=puzzle&tag=moon&tag=night&tag=liminal&tag=day&tag=dusk&search=a&minCapacity=1&maxCapacity=80"
+    }
+  ]
+}
