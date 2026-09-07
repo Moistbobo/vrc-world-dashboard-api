@@ -447,6 +447,7 @@ export class WorldRepository {
   private buildWhereClause(filters?: {
     tags?: string[];
     excludeFlags?: string[];
+    flagMode?: 'include' | 'exclude';
     platforms?: string[];
     guildId?: string;
     quality?: ('good' | 'bad')[];
@@ -494,15 +495,28 @@ export class WorldRepository {
     }
 
     if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
-      for (const flag of filters.excludeFlags) {
-        params.push(flag);
-        const p = params.length;
-        // Equivalent to NOT EXISTS (... AND flag = $p); written as NOT IN
-        // because pg-mem cannot parse NOT EXISTS subqueries. `flag` is NOT
-        // NULL, so no NULL could poison the comparison.
+      if (filters.flagMode === 'include') {
+        // Equivalent to EXISTS (... AND flag = ANY($p)); expanded to IN
+        // placeholders because pg-mem cannot parse = ANY($n::text[]).
+        const start = params.length;
+        const placeholders = filters.excludeFlags
+          .map((_, i) => `$${start + i + 1}`)
+          .join(', ');
+        params.push(...filters.excludeFlags);
         whereParts.push(
-          `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
+          `wr.world_id IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag IN (${placeholders}))`
         );
+      } else {
+        for (const flag of filters.excludeFlags) {
+          params.push(flag);
+          const p = params.length;
+          // Equivalent to NOT EXISTS (... AND flag = $p); written as NOT IN
+          // because pg-mem cannot parse NOT EXISTS subqueries. `flag` is NOT
+          // NULL, so no NULL could poison the comparison.
+          whereParts.push(
+            `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
+          );
+        }
       }
     }
 
@@ -572,6 +586,7 @@ export class WorldRepository {
     filters?: {
       tags?: string[];
       excludeFlags?: string[];
+      flagMode?: 'include' | 'exclude';
       platforms?: string[];
       guildId?: string;
       quality?: ('good' | 'bad')[];
