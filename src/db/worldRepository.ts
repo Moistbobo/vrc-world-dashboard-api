@@ -496,16 +496,13 @@ export class WorldRepository {
 
     if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
       if (filters.flagMode === 'include') {
-        // Equivalent to EXISTS (... AND flag = ANY($p)); expanded to IN
-        // placeholders because pg-mem cannot parse = ANY($n::text[]).
-        const start = params.length;
-        const placeholders = filters.excludeFlags
-          .map((_, i) => `$${start + i + 1}`)
-          .join(', ');
-        params.push(...filters.excludeFlags);
-        whereParts.push(
-          `wr.world_id IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag IN (${placeholders}))`
-        );
+        for (const flag of filters.excludeFlags) {
+          params.push(flag);
+          const p = params.length;
+          whereParts.push(
+            `wr.world_id IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
+          );
+        }
       } else {
         for (const flag of filters.excludeFlags) {
           params.push(flag);

@@ -152,8 +152,8 @@ Returns a paginated, filterable list of world records.
 | `limit`       | number            | `50`    | 500 | Number of records to return. |
 | `offset`      | number            | `0`     | —   | Number of records to skip (for pagination). |
 | `tag`         | string / string[] | —       | —   | Filter by tag(s). Comma-separated or repeated. Multiple values use AND logic. |
-| `exclude`     | string / string[] | —       | —   | Hide worlds carrying any of the given flag(s). Comma-separated or repeated. With the default `flagMode=exclude`, multiple values use AND logic (each adds its own exclusion); with `flagMode=include`, the list becomes a match-any (OR) filter for worlds carrying at least one of the flags. Available to all `worlds:read` tokens. |
-| `flagMode`    | string            | `exclude` | — | How to interpret the `exclude` flag list. `exclude` (default) hides worlds carrying the flags; `include` returns only worlds carrying at least one of them. Unrecognized values fall back to `exclude`. Only applies when `exclude` is provided. |
+| `exclude`     | string / string[] | —       | —   | Filter by flag(s). Comma-separated or repeated. With the default `flagMode=exclude`, hides worlds carrying any of the flags; with `flagMode=include`, returns only worlds carrying all of the flags (same AND logic as `tag`). Available to all `worlds:read` tokens. |
+| `flagMode`    | string            | `exclude` | — | How to interpret the `exclude` flag list. `exclude` (default) hides worlds carrying the flags; `include` returns only worlds carrying all of them, matching the `tag` filter's behavior. Unrecognized values fall back to `exclude`. Only applies when `exclude` is provided. |
 | `platform`    | string / string[] | —       | —   | Filter by supported platform(s). Comma-separated or repeated. Multiple values use AND logic. |
 | `quality`     | string / string[] | —       | —   | Filter by quality. Values: `good`, `bad`. |
 | `search`      | string            | —       | —   | Search across name, author, source content, world id, and tags. |

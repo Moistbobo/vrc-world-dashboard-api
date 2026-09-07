@@ -195,11 +195,13 @@ describe('world records', () => {
       expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_furry']);
     });
 
-    test('include mode with multiple flags is OR-combined', async () => {
+    test('include mode with multiple flags is AND-combined like tags', async () => {
+      await addWorld('wrld_both', 'guild-1');
       await addWorld('wrld_furry', 'guild-1');
       await addWorld('wrld_slop', 'guild-1');
       await addWorld('wrld_clean', 'guild-1');
       const flags = new FlagRepository(queryable);
+      await flags.replaceWorldFlags('wrld_both', ['furry', 'AI slop']);
       await flags.replaceWorldFlags('wrld_furry', ['furry']);
       await flags.replaceWorldFlags('wrld_slop', ['AI slop']);
       const repo = new WorldRepository(queryable);
@@ -208,11 +210,8 @@ describe('world records', () => {
         excludeFlags: ['furry', 'AI slop'],
         flagMode: 'include'
       });
-      expect(page.total).toBe(2);
-      expect(page.rows.map((r) => r.worldId).sort()).toEqual([
-        'wrld_furry',
-        'wrld_slop'
-      ]);
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_both']);
     });
 
     test('include mode composes with other filters (quality)', async () => {
