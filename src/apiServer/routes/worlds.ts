@@ -24,6 +24,7 @@ router.get(
     const tags = parseStringListQuery(query.tag);
     const platforms = parseStringListQuery(query.platform);
     const worldIds = parseStringListQuery(query.worldId);
+    const excludeFlags = parseStringListQuery(query.exclude);
 
     const quality = Array.isArray(query.quality)
       ? query.quality
@@ -78,6 +79,8 @@ router.get(
     const filters: {
       platforms?: string[];
       tags?: string[];
+      excludeFlags?: string[];
+      flagMode?: 'include' | 'exclude';
       quality?: ('good' | 'bad')[];
       search?: string;
       minCapacity?: number;
@@ -87,6 +90,8 @@ router.get(
       highPriorityOnly?: boolean;
     } = {};
     if (tags) filters.tags = tags;
+    if (excludeFlags) filters.excludeFlags = excludeFlags;
+    if (query.flagMode === 'include') filters.flagMode = 'include';
     if (platforms) filters.platforms = platforms;
     if (worldIds) filters.worldIds = worldIds;
     if (quality) filters.quality = quality;
@@ -141,13 +146,13 @@ router.get(
   }
 );
 
-// GET /api/worlds/pairs — internal helper for the bot's crawl cache
+// GET /api/worlds/ids — distinct world IDs for the bot's crawl cache
 router.get(
-  '/api/worlds/pairs',
+  '/api/worlds/ids',
   requirePermission('worlds:read'),
   async (_request, response) => {
-    const pairs = await getWorldRepository().getAllWorldGuildPairs();
-    response.send({ pairs });
+    const ids = await getWorldRepository().getAllWorldIds();
+    response.send({ ids });
   }
 );
 
@@ -157,18 +162,17 @@ router.get(
   requirePermission('worlds:read'),
   async (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
-    const matches = await getWorldRepository().getByWorldId(worldId);
+    const world = await getWorldRepository().getByWorldId(worldId);
 
-    if (matches.length === 0) {
+    if (!world) {
       return response.status(404).send({ error: 'World not found' });
     }
 
     const canManage =
       request.token?.role.permissions.includes('worlds:write') ?? false;
 
-    // Return first live match (most recent by created_at DESC)
     response.send(
-      sanitizeRecord(matches[0], {
+      sanitizeRecord(world, {
         includeHighPriority: canManage,
         includeQuality: canManage
       })

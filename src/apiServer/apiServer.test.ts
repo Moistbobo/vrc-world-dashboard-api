@@ -21,6 +21,10 @@ vi.mock('../db/tagRepository', () => ({
   getTagRepository: vi.fn()
 }));
 
+vi.mock('../db/flagRepository', () => ({
+  getFlagRepository: vi.fn()
+}));
+
 vi.mock('../db/tokenRepository', () => ({
   __esModule: true,
   getTokenRepository: vi.fn(),
@@ -48,6 +52,7 @@ vi.mock('../vrchat/client', () => ({
 import { getWorldRepository } from '../db/worldRepository';
 import { getTokenRepository } from '../db/tokenRepository';
 import { getTagRepository } from '../db/tagRepository';
+import { getFlagRepository } from '../db/flagRepository';
 import { TAG_SEED } from '../db/tagSeed';
 import { searchWorldsByName } from '../vrchat/client';
 import { createApiServer } from './index';
@@ -80,24 +85,23 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
         }
       ]
     })),
-    getByWorldId: vi.fn(() => [
-      {
-        worldId: 'wrld_abc123',
-        guildId: 'guild-1',
-        name: 'Spooky Mansion',
-        authorName: 'GhostDev',
-        capacity: 16,
-        platforms: ['standalonewindows', 'android'],
-        tags: ['horror', 'game'],
-        imageUrl: 'https://example.com/img.png',
-        sourceContent: null,
-        vrchatData: null,
-        packageSizes: [104.5, 78.2],
-        quality: 'good',
-        createdAt: 1717257600,
-        updatedAt: 1717257600
-      }
-    ]),
+    getByWorldId: vi.fn(() => ({
+      worldId: 'wrld_abc123',
+      guildId: 'guild-1',
+      name: 'Spooky Mansion',
+      authorName: 'GhostDev',
+      capacity: 16,
+      platforms: ['standalonewindows', 'android'],
+      tags: ['horror', 'game'],
+      imageUrl: 'https://example.com/img.png',
+      sourceContent: null,
+      vrchatData: null,
+      packageSizes: [104.5, 78.2],
+      quality: 'good',
+      createdAt: 1717257600,
+      updatedAt: 1717257600
+    })),
+    getAllWorldIds: vi.fn(() => ['wrld_abc123', 'wrld_def456']),
     getUniqueTags: vi.fn(() => [
       { tag: 'horror', count: 312 },
       { tag: 'game', count: 145 }
@@ -347,6 +351,122 @@ describe('API Server', () => {
         expect.objectContaining({ dayRange: 7 })
       );
     });
+
+    it('passes exclude flags to repository and is allowed for viewer tokens', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read', 'tags:read', 'meta:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?exclude=furry')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({ excludeFlags: ['furry'] })
+      );
+    });
+
+    it('parses repeated and comma-separated exclude values', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      await request(app)
+        .get('/api/worlds?exclude=furry&exclude=AI%20slop')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({ excludeFlags: ['furry', 'AI slop'] })
+      );
+    });
+
+    it('defaults to exclude mode when flagMode is absent', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      await request(app)
+        .get('/api/worlds?exclude=furry')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.not.objectContaining({ flagMode: 'include' })
+      );
+    });
+
+    it('passes flagMode=include to repository and is allowed for viewer tokens', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?exclude=furry&flagMode=include')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({
+          excludeFlags: ['furry'],
+          flagMode: 'include'
+        })
+      );
+    });
+
+    it('treats unrecognized flagMode values as exclude mode', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?exclude=furry&flagMode=bogus')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.not.objectContaining({ flagMode: 'include' })
+      );
+    });
+
+    it('returns flags on list and detail responses for viewer tokens', async () => {
+      asMock(getWorldRepository).mockReturnValue(createMockRepo());
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read', 'tags:read', 'meta:read'])
+      );
+
+      const list = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
+      expect(list.status).toBe(200);
+      expect(list.body.worlds[0].flags).toEqual([]);
+
+      const detail = await request(app)
+        .get('/api/worlds/wrld_abc123')
+        .set('authorization', 'Bearer test-token');
+      expect(detail.status).toBe(200);
+      expect(detail.body.flags).toEqual([]);
+    });
   });
 
   describe('GET /api/worlds/:worldId', () => {
@@ -370,7 +490,7 @@ describe('API Server', () => {
 
     it('returns 404 when world does not exist', async () => {
       asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldId: vi.fn(() => []) })
+        createMockRepo({ getByWorldId: vi.fn(() => undefined) })
       );
 
       const response = await request(app)
@@ -380,6 +500,21 @@ describe('API Server', () => {
       expect(response.status).toBe(404);
       expect(response.body).toEqual({
         error: 'World not found'
+      });
+    });
+  });
+
+  describe('GET /api/worlds/ids', () => {
+    it('returns distinct world ids', async () => {
+      asMock(getWorldRepository).mockReturnValue(createMockRepo());
+
+      const response = await request(app)
+        .get('/api/worlds/ids')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ids: ['wrld_abc123', 'wrld_def456']
       });
     });
   });
@@ -508,6 +643,73 @@ describe('API Server', () => {
         emoji: '❓',
         hexColor: '#94a3b8'
       });
+    });
+  });
+
+  describe('GET /api/flags', () => {
+    it('returns seeded counts and backfills unused catalog flags at zero', async () => {
+      asMock(getFlagRepository).mockReturnValue({
+        getAll: vi.fn(async () => ['furry', 'booth slop', 'sleepy']),
+        countByFlag: vi.fn(async () => [
+          { flag: 'furry', count: 12 },
+          { flag: 'booth slop', count: 4 }
+        ])
+      });
+
+      const response = await request(app)
+        .get('/api/flags')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        flags: [
+          { flag: 'furry', count: 12 },
+          { flag: 'booth slop', count: 4 },
+          { flag: 'sleepy', count: 0 }
+        ]
+      });
+    });
+
+    it('sorts by count descending with alphabetical ties', async () => {
+      asMock(getFlagRepository).mockReturnValue({
+        getAll: vi.fn(async () => ['alpha', 'beta', 'gamma', 'delta']),
+        countByFlag: vi.fn(async () => [
+          { flag: 'alpha', count: 3 },
+          { flag: 'beta', count: 3 },
+          { flag: 'gamma', count: 1 }
+        ])
+      });
+
+      const response = await request(app)
+        .get('/api/flags')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.body.flags.map((f: { flag: string }) => f.flag)).toEqual([
+        'alpha',
+        'beta',
+        'gamma',
+        'delta'
+      ]);
+    });
+
+    it('returns 401 without a token', async () => {
+      const response = await request(app).get('/api/flags');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ error: 'Unauthorized' });
+    });
+
+    it('returns 403 for a token lacking tags:read', async () => {
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/flags')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ error: 'Forbidden' });
     });
   });
 

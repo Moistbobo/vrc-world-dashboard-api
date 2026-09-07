@@ -74,14 +74,10 @@ export async function addWorld(req: AddWorldRequest): Promise<AddWorldResult> {
   const checkDuplicate = Config.DEV ? false : (req.checkDuplicate ?? true);
 
   if (checkDuplicate) {
-    const existing = await repo.getByWorldAndGuild(req.worldId, req.guildId);
+    const existing = await repo.getByWorldId(req.worldId);
     if (existing) {
       if (req.messageTimestamp !== undefined) {
-        await repo.backfillInternalAddDate(
-          req.worldId,
-          req.guildId,
-          req.messageTimestamp
-        );
+        await repo.backfillInternalAddDate(req.worldId, req.messageTimestamp);
       }
       return {
         status: 'duplicate',

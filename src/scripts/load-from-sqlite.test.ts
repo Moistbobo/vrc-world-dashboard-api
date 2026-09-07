@@ -193,7 +193,7 @@ describe('load-from-sqlite', () => {
     ({ queryable, db } = createTestDb());
     await runMigrations(queryable);
     await queryable.query(
-      'ALTER TABLE world_records DROP CONSTRAINT world_records_constraint_1'
+      'ALTER TABLE world_records DROP CONSTRAINT world_records_quality_check'
     );
     // pg-mem does not implement pg_get_serial_sequence/setval, so the
     // sequence-resync in syncSequence becomes a no-op here.
@@ -344,15 +344,13 @@ describe('load-from-sqlite', () => {
 
     const highPriority = await queryable.query<{
       world_id: string;
-      guild_id: string;
       added_at: number;
       added_by_token_id: number;
-    }>(`SELECT world_id, guild_id, added_at, added_by_token_id
+    }>(`SELECT world_id, added_at, added_by_token_id
         FROM high_priority_worlds`);
     expect(highPriority.rows).toEqual([
       {
         world_id: 'wrld_abc',
-        guild_id: 'guild-1',
         added_at: 1710000800,
         added_by_token_id: 1
       }

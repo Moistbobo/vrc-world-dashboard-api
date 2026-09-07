@@ -1,0 +1,5 @@
+pgdata/
+*.dump
+pg.log
+local-explain-before.json
+local-explain-after.json

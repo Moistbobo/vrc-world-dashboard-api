@@ -1,5 +1,5 @@
 {
-  "exclude": ["dist", "eslint.config.mts", "vitest.config.ts", "vitest.setup.ts"],
+  "exclude": ["dist", "eslint.config.mts", "vitest.config.ts", "vitest.setup.ts", "perf"],
   "compilerOptions": {
     "skipLibCheck": true,
     "module": "nodenext",

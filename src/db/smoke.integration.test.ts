@@ -143,11 +143,11 @@ run('full smoke: tags catalog + world_tags junction', () => {
       const { WorldRepository } = await import('./worldRepository.js');
       const repo = new WorldRepository(createQueryable(pool));
 
-      const record = await repo.getByWorldAndGuild('wrld_horror', 'guild-1');
+      const record = await repo.getByWorldId('wrld_horror');
       expect(record?.tags).toEqual(['horror', 'game']);
-      const kino = await repo.getByWorldAndGuild('wrld_kino', 'guild-1');
+      const kino = await repo.getByWorldId('wrld_kino');
       expect(kino?.tags).toEqual(['kino', 'chill', 'space']);
-      const empty = await repo.getByWorldAndGuild('wrld_empty', 'guild-1');
+      const empty = await repo.getByWorldId('wrld_empty');
       expect(empty?.tags).toEqual([]);
     });
 
@@ -170,9 +170,10 @@ run('full smoke: tags catalog + world_tags junction', () => {
         vrchatData: null,
         packageSizes: []
       });
-      expect(
-        (await repo.getByWorldAndGuild('wrld_new', 'guild-1'))?.tags
-      ).toEqual(['chill', 'horror']);
+      expect((await repo.getByWorldId('wrld_new'))?.tags).toEqual([
+        'chill',
+        'horror'
+      ]);
 
       await repo.upsert({
         worldId: 'wrld_new',
@@ -188,9 +189,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
         vrchatData: null,
         packageSizes: []
       });
-      expect(
-        (await repo.getByWorldAndGuild('wrld_new', 'guild-1'))?.tags
-      ).toEqual(['game']);
+      expect((await repo.getByWorldId('wrld_new'))?.tags).toEqual(['game']);
     });
 
     it('records the curator token on tag edits and preserves order', async () => {
@@ -204,14 +203,14 @@ run('full smoke: tags catalog + world_tags junction', () => {
 
       const updated = await repo.updateTagsOnly(
         'wrld_kino',
-        'guild-1',
         ['space', 'chill'],
         curatorRecord.id
       );
       expect(updated).toBe(true);
-      expect(
-        (await repo.getByWorldAndGuild('wrld_kino', 'guild-1'))?.tags
-      ).toEqual(['space', 'chill']);
+      expect((await repo.getByWorldId('wrld_kino'))?.tags).toEqual([
+        'space',
+        'chill'
+      ]);
 
       const q = createQueryable(pool);
       const rows = await q.query<{ tag: string; added_by_token_id: number }>(
@@ -256,7 +255,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
       const { WorldRepository } = await import('./worldRepository.js');
       const repo = new WorldRepository(createQueryable(pool));
 
-      const deleted = await repo.deleteByWorldAndGuild('wrld_empty', 'guild-1');
+      const deleted = await repo.deleteByWorldId('wrld_empty');
       expect(deleted).toBe(true);
 
       const q = createQueryable(pool);

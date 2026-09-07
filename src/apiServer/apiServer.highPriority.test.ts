@@ -105,8 +105,7 @@ describe('High priority worlds API', () => {
   function mockWorldRepo(overrides: Record<string, unknown> = {}) {
     asMock(getWorldRepository).mockReturnValue({
       getAllPaginated: vi.fn(() => ({ total: 1, rows: [WORLD_ROW] })),
-      getByWorldId: vi.fn(() => [WORLD_ROW]),
-      getByWorldAndGuild: vi.fn(() => WORLD_ROW),
+      getByWorldId: vi.fn(() => WORLD_ROW),
       ...overrides
     });
   }
@@ -152,20 +151,17 @@ describe('High priority worlds API', () => {
       expect(response.body).toEqual({ error: 'Forbidden' });
     });
 
-    it('returns 400 on invalid body', async () => {
+    it('accepts an empty body', async () => {
       const response = await request(app)
         .put(`/api/worlds/${WORLD_ID}/high-priority`)
-        .set(AUTH)
-        .send({});
+        .set(AUTH);
 
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        error: 'Invalid body. Expected { guildId }'
-      });
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ added: true });
     });
 
     it('returns 404 when the world does not exist', async () => {
-      mockWorldRepo({ getByWorldAndGuild: vi.fn(() => undefined) });
+      mockWorldRepo({ getByWorldId: vi.fn(() => undefined) });
 
       const response = await request(app)
         .put(`/api/worlds/${WORLD_ID}/high-priority`)
@@ -197,7 +193,7 @@ describe('High priority worlds API', () => {
       expect(second.status).toBe(200);
       expect(second.body).toEqual({ added: false });
 
-      expect(add).toHaveBeenCalledWith(WORLD_ID, GUILD_ID, 1);
+      expect(add).toHaveBeenCalledWith(WORLD_ID, 1);
     });
   });
 
@@ -223,20 +219,17 @@ describe('High priority worlds API', () => {
       expect(response.body).toEqual({ error: 'Forbidden' });
     });
 
-    it('returns 400 on invalid body', async () => {
+    it('accepts an empty body', async () => {
       const response = await request(app)
         .delete(`/api/worlds/${WORLD_ID}/high-priority`)
-        .set(AUTH)
-        .send({});
+        .set(AUTH);
 
-      expect(response.status).toBe(400);
-      expect(response.body).toEqual({
-        error: 'Invalid body. Expected { guildId }'
-      });
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ removed: true });
     });
 
     it('returns 404 when the world does not exist', async () => {
-      mockWorldRepo({ getByWorldAndGuild: vi.fn(() => undefined) });
+      mockWorldRepo({ getByWorldId: vi.fn(() => undefined) });
 
       const response = await request(app)
         .delete(`/api/worlds/${WORLD_ID}/high-priority`)
@@ -268,7 +261,7 @@ describe('High priority worlds API', () => {
       expect(second.status).toBe(200);
       expect(second.body).toEqual({ removed: false });
 
-      expect(remove).toHaveBeenCalledWith(WORLD_ID, GUILD_ID);
+      expect(remove).toHaveBeenCalledWith(WORLD_ID);
     });
   });
 

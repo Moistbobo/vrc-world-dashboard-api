@@ -81,7 +81,7 @@ pnpm role:update -- --name curator-v2 --add meta:read --remove tags:read
 
 | Permission | Routes |
 |------------|--------|
-| `worlds:read` | `GET /api/worlds`, `GET /api/worlds/search`, `GET /api/worlds/pairs`, `GET /api/worlds/:worldId`, `POST /api/worlds/extract` |
+| `worlds:read` | `GET /api/worlds`, `GET /api/worlds/search`, `GET /api/worlds/ids`, `GET /api/worlds/:worldId`, `POST /api/worlds/extract` |
 | `worlds:write` | `POST /api/worlds`, `DELETE /api/worlds/:worldId`, `PUT /api/worlds/:worldId/quality`, `PUT /api/worlds/:worldId/tags`, `PUT /api/worlds/:worldId/high-priority`, `DELETE /api/worlds/:worldId/high-priority` |
 | `tags:read` | `GET /api/tags` |
 | `tags:write` | `PUT /api/worlds/:worldId/tags/edit` |
@@ -152,6 +152,8 @@ Returns a paginated, filterable list of world records.
 | `limit`       | number            | `50`    | 500 | Number of records to return. |
 | `offset`      | number            | `0`     | —   | Number of records to skip (for pagination). |
 | `tag`         | string / string[] | —       | —   | Filter by tag(s). Comma-separated or repeated. Multiple values use AND logic. |
+| `exclude`     | string / string[] | —       | —   | Filter by flag(s). Comma-separated or repeated. With the default `flagMode=exclude`, hides worlds carrying any of the flags; with `flagMode=include`, returns only worlds carrying all of the flags (same AND logic as `tag`). Available to all `worlds:read` tokens. |
+| `flagMode`    | string            | `exclude` | — | How to interpret the `exclude` flag list. `exclude` (default) hides worlds carrying the flags; `include` returns only worlds carrying all of them, matching the `tag` filter's behavior. Unrecognized values fall back to `exclude`. Only applies when `exclude` is provided. |
 | `platform`    | string / string[] | —       | —   | Filter by supported platform(s). Comma-separated or repeated. Multiple values use AND logic. |
 | `quality`     | string / string[] | —       | —   | Filter by quality. Values: `good`, `bad`. |
 | `search`      | string            | —       | —   | Search across name, author, source content, world id, and tags. |
@@ -176,6 +178,7 @@ Returns a paginated, filterable list of world records.
       "capacity": 40,
       "platforms": ["android", "standalonewindows"],
       "tags": ["social", "hangout", "bar"],
+      "flags": ["furry", "AI slop"],
       "imageUrl": "https://api.vrchat.cloud/api/1/file/...",
       "vrchatUrl": "https://vrchat.com/home/world/wrld_abc123",
       "quality": "good",
@@ -188,13 +191,15 @@ Returns a paginated, filterable list of world records.
 
 The `quality`, `highPriority`, and `guildId` fields are present only for
 tokens with the `worlds:write` permission; viewer tokens receive the record
-without them.
+without them. The `flags` field is present for all tokens.
 
 All filters combine with AND logic. Example:
 
 ```
 GET /api/worlds?minCapacity=10&maxCapacity=40&quality=good&tag=horror&platform=android
 GET /api/worlds?dayRange=7&tag=horror&quality=good
+GET /api/worlds?exclude=furry&exclude=AI slop
+GET /api/worlds?exclude=furry&exclude=AI slop&flagMode=include
 ```
 
 ---
@@ -250,7 +255,8 @@ GET /api/worlds/:worldId
 
 Returns the most recent record for a specific VRChat world ID. The
 `quality`, `highPriority`, and `guildId` fields follow the same rule as
-`GET /api/worlds`: present only for tokens with `worlds:write`.
+`GET /api/worlds`: present only for tokens with `worlds:write`. The `flags`
+field is present for all tokens.
 
 **Path parameter**
 
@@ -270,7 +276,28 @@ Status code: **404**
 
 ---
 
-### 5. List All Tags
+### 5. List World IDs
+
+```
+GET /api/worlds/ids
+```
+
+Returns every distinct world ID currently stored, sorted ascending. This
+replaces the former `GET /api/worlds/pairs` endpoint, which was removed when
+world records collapsed to one row per world; a client still calling `/pairs`
+now hits the detail route with an unknown world ID and receives a 404.
+
+**Response**
+
+```json
+{
+  "ids": ["wrld_abc123", "wrld_def456"]
+}
+```
+
+---
+
+### 6. List All Tags
 
 ```
 GET /api/tags
@@ -295,7 +322,7 @@ In-data tags missing from the catalog fall back to `"❓"` and `"#94a3b8"`.
 
 ---
 
-### 6. Metadata Counts
+### 7. Metadata Counts
 
 ```
 GET /api/meta
@@ -326,14 +353,21 @@ across all world records. Tokens with `worlds:write` also receive
 
 The bot uses these endpoints to add, update, and delete worlds over HTTP.
 
-### 7. Add World
+World records are keyed by `worldId` alone: there is exactly one record per
+world. A `guildId` sent in a mutation body is accepted for backwards
+compatibility but ignored, except on `POST /api/worlds` where it remains
+required as provenance for the ingest.
+
+### 8. Add World
 
 ```
 POST /api/worlds
 ```
 
 The API fetches VRChat data for the world, extracts tags from the message
-content, and upserts the record. Scoped to `(worldId, guildId)`.
+content, and upserts the record keyed by `worldId`. When the world already
+exists, the existing row is updated and its `guildId` is refreshed with the
+submitting guild.
 
 **Request body**
 
@@ -351,7 +385,7 @@ content, and upserts the record. Scoped to `(worldId, guildId)`.
 | Field              | Type     | Required | Description |
 |--------------------|----------|----------|-------------|
 | `worldId`          | string   | yes      | VRChat world ID, must match `wrld_` + 36 hex chars. |
-| `guildId`          | string   | yes      | Discord guild ID. |
+| `guildId`          | string   | yes      | Discord guild ID submitting the world. Stored as provenance. |
 | `messageId`        | string   | yes      | Discord message ID (snowflake). Used as the duplicate-response link and to derive `internalAddDate` when `messageTimestamp` is absent. |
 | `content`          | string   | yes      | The entire Discord message text. Tag extraction source. |
 | `messageTimestamp` | number   | no       | Unix seconds. Stored as `internalAddDate` when provided; otherwise derived from the snowflake. |
@@ -389,7 +423,7 @@ from `existingMessageId` and the channel.
 
 ---
 
-### 8. Extract Worlds
+### 9. Extract Worlds
 
 ```
 POST /api/worlds/extract
@@ -428,21 +462,20 @@ API; the bot just forwards message content.
 
 ---
 
-### 9. Delete World
+### 10. Delete World
 
 ```
 DELETE /api/worlds/:worldId
 ```
 
-Archives the `(worldId, guildId)` record into `deleted_world_records` and
-removes it from the live table. This is the undo-tag / remove-reaction flow.
+Archives the world's record into `deleted_world_records` and removes it from
+the live table. This is the undo-tag / remove-reaction flow. The request body
+may be empty; a `guildId` sent in the body is accepted and ignored.
 
 **Request body**
 
 ```json
-{
-  "guildId": "123456789012345678"
-}
+{}
 ```
 
 **Success** — status `204`, no body.
@@ -451,21 +484,20 @@ removes it from the live table. This is the undo-tag / remove-reaction flow.
 
 | Status | Body |
 |--------|------|
-| `400`  | `{ "error": "Invalid body. Expected { guildId }" }` |
 | `401`  | `{ "error": "Unauthorized" }` |
 | `404`  | `{ "error": "World not found" }` |
 
 ---
 
-### 10. Set Quality
+### 11. Set Quality
 
 ```
 PUT /api/worlds/:worldId/quality
 ```
 
-Sets the quality rating (`good` / `bad`) on the `(worldId, guildId)` record.
-This is the 👍/👎 reaction flow. Send `"quality": null` to clear the rating.
-No-op when the quality is unchanged.
+Sets the quality rating (`good` / `bad`) on the world's record. This is the
+👍/👎 reaction flow. Send `"quality": null` to clear the rating. No-op when
+the quality is unchanged. A `guildId` in the body is accepted and ignored.
 
 **Request body**
 
@@ -475,6 +507,11 @@ No-op when the quality is unchanged.
   "quality": "good"
 }
 ```
+
+| Field      | Type                      | Required | Description |
+|------------|---------------------------|----------|-------------|
+| `quality`  | `"good"` \| `"bad"` \| null | yes      | Rating to set; `null` clears it. |
+| `guildId`  | string                    | no       | Deprecated. Accepted and ignored. |
 
 **Success** — status `200`:
 
@@ -488,21 +525,22 @@ No-op when the quality is unchanged.
 
 | Status | Body |
 |--------|------|
-| `400`  | `{ "error": "Invalid body. Expected { guildId, quality }" }` |
+| `400`  | `{ "error": "Invalid body. Expected { quality }" }` |
 | `401`  | `{ "error": "Unauthorized" }` |
 | `404`  | `{ "error": "World not found" }` |
 
 ---
 
-### 11. Set Tags
+### 12. Set Tags
 
 ```
 PUT /api/worlds/:worldId/tags
 ```
 
-Recomputes tags and updates the `(worldId, guildId)` record. This is the
-crawlHistory backfill flow. Tags are extracted server-side using the shared
-taxonomy; the client no longer sends them. No-op when nothing changed.
+Recomputes tags and updates the world's record. This is the crawlHistory
+backfill flow. Tags are extracted server-side using the shared taxonomy; the
+client no longer sends them. No-op when nothing changed. A `guildId` in the
+body is accepted and ignored.
 
 `sourceContent` is persisted verbatim as the record's source text. When the
 bot backfills a multi-world message, it additionally sends `tagSource` (the
@@ -521,7 +559,8 @@ combined input the live flow uses.
 }
 ```
 
-`sourceContent` may be `null`. `tagSource` is optional.
+`sourceContent` may be `null`. `tagSource` is optional. `guildId` is
+deprecated: accepted and ignored.
 
 **Success** — status `200`:
 
@@ -536,13 +575,13 @@ combined input the live flow uses.
 
 | Status | Body |
 |--------|------|
-| `400`  | `{ "error": "Invalid body. Expected { guildId, sourceContent }" }` |
+| `400`  | `{ "error": "Invalid body. Expected { sourceContent }" }` |
 | `401`  | `{ "error": "Unauthorized" }` |
 | `404`  | `{ "error": "World not found" }` |
 
 ---
 
-### 12. Get Current Token
+### 13. Get Current Token
 
 ```
 GET /api/me
@@ -569,22 +608,21 @@ valid token (including `viewer`) can read its own identity.
 
 ---
 
-### 13. Mark World High Priority
+### 14. Mark World High Priority
 
 ```
 PUT /api/worlds/:worldId/high-priority
 ```
 
-Adds the `(worldId, guildId)` record to the high-priority list. Idempotent:
-returns `added: false` when the world is already on the list. The record must
-exist in `world_records`.
+Adds the world to the high-priority list. Idempotent: returns `added: false`
+when the world is already on the list. The record must exist in
+`world_records`. The request body may be empty; a `guildId` is accepted and
+ignored.
 
 **Request body**
 
 ```json
-{
-  "guildId": "123456789012345678"
-}
+{}
 ```
 
 **Success** — status `200`:
@@ -599,29 +637,27 @@ exist in `world_records`.
 
 | Status | Body |
 |--------|------|
-| `400`  | `{ "error": "Invalid body. Expected { guildId }" }` |
 | `401`  | `{ "error": "Unauthorized" }` |
 | `403`  | `{ "error": "Forbidden" }` |
 | `404`  | `{ "error": "World not found" }` |
 
 ---
 
-### 14. Remove World High Priority
+### 15. Remove World High Priority
 
 ```
 DELETE /api/worlds/:worldId/high-priority
 ```
 
-Removes the `(worldId, guildId)` record from the high-priority list.
-Idempotent: returns `removed: false` when the world is not on the list. The
-record must exist in `world_records`.
+Removes the world from the high-priority list. Idempotent: returns
+`removed: false` when the world is not on the list. The record must exist in
+`world_records`. The request body may be empty; a `guildId` is accepted and
+ignored.
 
 **Request body**
 
 ```json
-{
-  "guildId": "123456789012345678"
-}
+{}
 ```
 
 **Success** — status `200`:
@@ -636,23 +672,23 @@ record must exist in `world_records`.
 
 | Status | Body |
 |--------|------|
-| `400`  | `{ "error": "Invalid body. Expected { guildId }" }` |
 | `401`  | `{ "error": "Unauthorized" }` |
 | `403`  | `{ "error": "Forbidden" }` |
 | `404`  | `{ "error": "World not found" }` |
 
 ---
 
-### 15. Edit World Tags
+### 16. Edit World Tags
 
 ```
 PUT /api/worlds/:worldId/tags/edit
 ```
 
-Directly sets the tags on the `(worldId, guildId)` record. Unlike
+Directly sets the tags on the world's record. Unlike
 `PUT /api/worlds/:worldId/tags` (which recomputes tags from message content),
 the client supplies the tags and `source_content` is left untouched. Requires
-the `tags:write` permission (held by `curator` and `admin` roles).
+the `tags:write` permission (held by `curator` and `admin` roles). A
+`guildId` in the body is accepted and ignored.
 
 Tags are validated against the shared taxonomy; variant spellings are
 canonicalized server-side (e.g. `vrmv` → `particle live / vrmv`). Unknown
@@ -683,11 +719,95 @@ world's tags. No-op when the tags are unchanged.
 
 | Status | Body |
 |--------|------|
-| `400`  | `{ "error": "Invalid body. Expected { guildId, tags }" }` |
+| `400`  | `{ "error": "Invalid body. Expected { tags }" }` |
 | `400`  | `{ "error": "Invalid tags: <unknown tags>" }` |
 | `401`  | `{ "error": "Unauthorized" }` |
 | `403`  | `{ "error": "Forbidden" }` |
 | `404`  | `{ "error": "World not found" }` |
+
+---
+
+### 17. Edit World Flags
+
+```
+PUT /api/worlds/:worldId/flags/edit
+```
+
+Replaces the world's full flag set (curator-set "bad/negative" markers like
+`furry`, `booth slop`). Requires the `tags:write` permission (held by
+`curator` and `admin` roles). A `guildId` in the body is accepted and ignored.
+
+Flags are a separate classification from the automatically-extracted tags and
+are edited through this endpoint, not `PUT /api/worlds/:worldId/tags/edit`.
+Each side is atomic on its own; a curator changing both sends two calls.
+
+Flags are validated against the flag catalog (loaded from the `flags` table at
+boot); canonical spellings are resolved server-side. Unknown flags cause a
+`400` naming the invalid values. An empty `flags` array clears the world's
+flags. No-op when the flag set is unchanged.
+
+**Request body**
+
+```json
+{
+  "guildId": "123456789012345678",
+  "flags": ["furry", "booth slop"]
+}
+```
+
+**Success** — status `200`:
+
+```json
+{
+  "updated": true,
+  "flags": ["furry", "booth slop"]
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `400`  | `{ "error": "Invalid body. Expected { flags }" }` |
+| `400`  | `{ "error": "Invalid flags: <unknown flags>" }` |
+| `401`  | `{ "error": "Unauthorized" }` |
+| `403`  | `{ "error": "Forbidden" }` |
+| `404`  | `{ "error": "World not found" }` |
+
+---
+
+### 18. List Flag Counts
+
+```
+GET /api/flags
+```
+
+Returns every flag in the `flags` catalog (curator-set "bad/negative"
+markers like `furry`, `booth slop`) with a count of how many world records
+carry it. Unused catalog flags are included with a count of `0`. Flags are
+sorted by count descending, ties resolved alphabetically. Unlike
+`GET /api/tags`, no emoji or hex color metadata is included.
+
+Requires the `tags:read` permission (same gate as `GET /api/tags`).
+
+**Response**
+
+```json
+{
+  "flags": [
+    { "flag": "furry", "count": 12 },
+    { "flag": "booth slop", "count": 4 },
+    { "flag": "sleepy", "count": 0 }
+  ]
+}
+```
+
+**Errors**
+
+| Status | Body |
+|--------|------|
+| `401`  | `{ "error": "Unauthorized" }` |
+| `403`  | `{ "error": "Forbidden" }` |
 
 ---
 
@@ -704,11 +824,12 @@ Each world object returned by the API has the following fields:
 | `platforms`       | string[]                 | Supported platforms (`android`, `standalonewindows`, etc.). |
 | `packageSizes`    | (number \| null)[]       | Download size in MB per platform, aligned 1:1 with `platforms`. `null` when the size could not be determined. |
 | `tags`            | string[]                 | Tags applied to this world record. |
+| `flags`           | string[]                 | Flags applied to this world (empty array when none). Visible to all tokens. |
 | `imageUrl`        | string \| null           | Thumbnail image URL from VRChat API. |
 | `vrchatUrl`       | string                   | Link to the world on the VRChat website. |
 | `quality`         | `"good"` \| `"bad"` \| null | Manual quality rating (if set). Present only for tokens with `worlds:write`. |
 | `highPriority`    | boolean                 | Whether the world is on the high-priority list. Present only for tokens with `worlds:write`. |
-| `guildId`         | string                   | Discord guild the record belongs to. Present only for tokens with `worlds:write`. |
+| `guildId`         | string                   | Discord guild that last submitted or updated the world. Present only for tokens with `worlds:write`. |
 | `createdAt`       | string \| undefined      | ISO 8601 timestamp of when the record was created. |
 | `internalAddDate` | string \| null           | ISO 8601 timestamp of when the world was originally tagged, if known. |
 
@@ -774,32 +895,33 @@ curl -X POST -H "Authorization: Bearer my-token" \
   }' \
   http://localhost:3000/api/worlds
 
-# Delete a world (undo tag)
+# Delete a world (undo tag; body optional)
 curl -X DELETE -H "Authorization: Bearer my-token" \
-  -H "Content-Type: application/json" \
-  -d '{"guildId": "123456789012345678"}' \
   http://localhost:3000/api/worlds/wrld_abc123
 
 # Set quality (👍/👎 reactions)
 curl -X PUT -H "Authorization: Bearer my-token" \
   -H "Content-Type: application/json" \
-  -d '{"guildId": "123456789012345678", "quality": "good"}' \
+  -d '{"quality": "good"}' \
   http://localhost:3000/api/worlds/wrld_abc123/quality
 
 # Set tags (crawlHistory backfill; tags computed server-side)
 curl -X PUT -H "Authorization: Bearer my-token" \
   -H "Content-Type: application/json" \
-  -d '{
-    "guildId": "123456789012345678",
-    "sourceContent": "the original message text"
-  }' \
+  -d '{"sourceContent": "the original message text"}' \
   http://localhost:3000/api/worlds/wrld_abc123/tags
 
 # Edit tags directly (tags:write token required; tags validated against taxonomy)
 curl -X PUT -H "Authorization: Bearer my-token" \
   -H "Content-Type: application/json" \
-  -d '{"guildId": "123456789012345678", "tags": ["horror", "game"]}' \
+  -d '{"tags": ["horror", "game"]}' \
   http://localhost:3000/api/worlds/wrld_abc123/tags/edit
+
+# Edit flags directly (tags:write token required; flags validated against the catalog)
+curl -X PUT -H "Authorization: Bearer my-token" \
+  -H "Content-Type: application/json" \
+  -d '{"flags": ["furry", "booth slop"]}' \
+  http://localhost:3000/api/worlds/wrld_abc123/flags/edit
 
 # Extract world IDs from message content (Twitter/X resolution included)
 curl -X POST -H "Authorization: Bearer my-token" \
@@ -811,16 +933,16 @@ curl -X POST -H "Authorization: Bearer my-token" \
 curl -H "Authorization: Bearer my-token" \
   http://localhost:3000/api/me
 
-# Mark / unmark a world as high priority
+# Mark / unmark a world as high priority (bodies optional)
 curl -X PUT -H "Authorization: Bearer my-token" \
-  -H "Content-Type: application/json" \
-  -d '{"guildId": "123456789012345678"}' \
   http://localhost:3000/api/worlds/wrld_abc123/high-priority
 
 curl -X DELETE -H "Authorization: Bearer my-token" \
-  -H "Content-Type: application/json" \
-  -d '{"guildId": "123456789012345678"}' \
   http://localhost:3000/api/worlds/wrld_abc123/high-priority
+
+# List the distinct world IDs (replaces the removed /api/worlds/pairs)
+curl -H "Authorization: Bearer my-token" \
+  http://localhost:3000/api/worlds/ids
 
 # List only high-priority worlds (worlds:write token required)
 curl -H "Authorization: Bearer my-token" \
