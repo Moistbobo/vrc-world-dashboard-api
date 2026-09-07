@@ -80,6 +80,7 @@ router.get(
       platforms?: string[];
       tags?: string[];
       excludeFlags?: string[];
+      flagMode?: 'include' | 'exclude';
       quality?: ('good' | 'bad')[];
       search?: string;
       minCapacity?: number;
@@ -90,6 +91,7 @@ router.get(
     } = {};
     if (tags) filters.tags = tags;
     if (excludeFlags) filters.excludeFlags = excludeFlags;
+    if (query.flagMode === 'include') filters.flagMode = 'include';
     if (platforms) filters.platforms = platforms;
     if (worldIds) filters.worldIds = worldIds;
     if (quality) filters.quality = quality;

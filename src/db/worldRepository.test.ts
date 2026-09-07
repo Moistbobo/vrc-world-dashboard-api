@@ -178,6 +178,94 @@ describe('world records', () => {
     });
   });
 
+  describe('getAllPaginated includeFlags', () => {
+    test('include mode with one flag returns only worlds carrying it', async () => {
+      await addWorld('wrld_furry', 'guild-1');
+      await addWorld('wrld_clean', 'guild-1');
+      await new FlagRepository(queryable).replaceWorldFlags('wrld_furry', [
+        'furry'
+      ]);
+      const repo = new WorldRepository(queryable);
+
+      const page = await repo.getAllPaginated(10, 0, {
+        excludeFlags: ['furry'],
+        flagMode: 'include'
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_furry']);
+    });
+
+    test('include mode with multiple flags is AND-combined like tags', async () => {
+      await addWorld('wrld_both', 'guild-1');
+      await addWorld('wrld_furry', 'guild-1');
+      await addWorld('wrld_slop', 'guild-1');
+      await addWorld('wrld_clean', 'guild-1');
+      const flags = new FlagRepository(queryable);
+      await flags.replaceWorldFlags('wrld_both', ['furry', 'AI slop']);
+      await flags.replaceWorldFlags('wrld_furry', ['furry']);
+      await flags.replaceWorldFlags('wrld_slop', ['AI slop']);
+      const repo = new WorldRepository(queryable);
+
+      const page = await repo.getAllPaginated(10, 0, {
+        excludeFlags: ['furry', 'AI slop'],
+        flagMode: 'include'
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_both']);
+    });
+
+    test('include mode composes with other filters (quality)', async () => {
+      await addWorld('wrld_furry_pc', 'guild-1');
+      await addWorld('wrld_furry_q', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_furry_pc', 'good');
+      await new FlagRepository(queryable).replaceWorldFlags('wrld_furry_pc', [
+        'furry'
+      ]);
+      await new FlagRepository(queryable).replaceWorldFlags('wrld_furry_q', [
+        'furry'
+      ]);
+
+      const page = await repo.getAllPaginated(10, 0, {
+        excludeFlags: ['furry'],
+        flagMode: 'include',
+        quality: ['good']
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_furry_pc']);
+    });
+
+    test('empty include list applies no filter', async () => {
+      await addWorld('wrld_furry', 'guild-1');
+      await addWorld('wrld_clean', 'guild-1');
+      await new FlagRepository(queryable).replaceWorldFlags('wrld_furry', [
+        'furry'
+      ]);
+      const repo = new WorldRepository(queryable);
+
+      const page = await repo.getAllPaginated(10, 0, {
+        excludeFlags: [],
+        flagMode: 'include'
+      });
+      expect(page.total).toBe(2);
+    });
+
+    test('unknown flag in include mode returns empty result', async () => {
+      await addWorld('wrld_furry', 'guild-1');
+      await new FlagRepository(queryable).replaceWorldFlags('wrld_furry', [
+        'furry'
+      ]);
+      const repo = new WorldRepository(queryable);
+
+      const page = await repo.getAllPaginated(10, 0, {
+        excludeFlags: ['nonexistent'],
+        flagMode: 'include'
+      });
+      expect(page.total).toBe(0);
+      expect(page.rows).toEqual([]);
+    });
+  });
+
   describe('upsert', () => {
     test('a resubmission from a different guild updates the row and refreshes guild_id', async () => {
       await addWorld('wrld_abc', 'guild-1', ['horror']);

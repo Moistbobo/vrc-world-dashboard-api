@@ -447,6 +447,7 @@ export class WorldRepository {
   private buildWhereClause(filters?: {
     tags?: string[];
     excludeFlags?: string[];
+    flagMode?: 'include' | 'exclude';
     platforms?: string[];
     guildId?: string;
     quality?: ('good' | 'bad')[];
@@ -494,15 +495,25 @@ export class WorldRepository {
     }
 
     if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
-      for (const flag of filters.excludeFlags) {
-        params.push(flag);
-        const p = params.length;
-        // Equivalent to NOT EXISTS (... AND flag = $p); written as NOT IN
-        // because pg-mem cannot parse NOT EXISTS subqueries. `flag` is NOT
-        // NULL, so no NULL could poison the comparison.
-        whereParts.push(
-          `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
-        );
+      if (filters.flagMode === 'include') {
+        for (const flag of filters.excludeFlags) {
+          params.push(flag);
+          const p = params.length;
+          whereParts.push(
+            `wr.world_id IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
+          );
+        }
+      } else {
+        for (const flag of filters.excludeFlags) {
+          params.push(flag);
+          const p = params.length;
+          // Equivalent to NOT EXISTS (... AND flag = $p); written as NOT IN
+          // because pg-mem cannot parse NOT EXISTS subqueries. `flag` is NOT
+          // NULL, so no NULL could poison the comparison.
+          whereParts.push(
+            `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag = $${p})`
+          );
+        }
       }
     }
 
@@ -572,6 +583,7 @@ export class WorldRepository {
     filters?: {
       tags?: string[];
       excludeFlags?: string[];
+      flagMode?: 'include' | 'exclude';
       platforms?: string[];
       guildId?: string;
       quality?: ('good' | 'bad')[];

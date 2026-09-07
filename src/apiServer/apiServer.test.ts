@@ -390,6 +390,65 @@ describe('API Server', () => {
       );
     });
 
+    it('defaults to exclude mode when flagMode is absent', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      await request(app)
+        .get('/api/worlds?exclude=furry')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.not.objectContaining({ flagMode: 'include' })
+      );
+    });
+
+    it('passes flagMode=include to repository and is allowed for viewer tokens', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?exclude=furry&flagMode=include')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({
+          excludeFlags: ['furry'],
+          flagMode: 'include'
+        })
+      );
+    });
+
+    it('treats unrecognized flagMode values as exclude mode', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?exclude=furry&flagMode=bogus')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.not.objectContaining({ flagMode: 'include' })
+      );
+    });
+
     it('returns flags on list and detail responses for viewer tokens', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
       asMock(getTokenRepository).mockReturnValue(
