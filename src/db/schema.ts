@@ -422,6 +422,15 @@ export const MIGRATIONS: Migration[] = [
         `CREATE INDEX IF NOT EXISTS idx_world_flags_flag ON world_flags(flag)`
       );
     }
+  },
+  {
+    name: '016_worlds_tagged_date_index',
+    run: async (db) => {
+      await db.query(
+        `CREATE INDEX IF NOT EXISTS idx_worlds_tagged_date
+         ON world_records (COALESCE(internal_add_date, created_at))`
+      );
+    }
   }
 ];
 
