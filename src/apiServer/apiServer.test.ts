@@ -449,6 +449,66 @@ describe('API Server', () => {
       );
     });
 
+    it('passes order=asc to the repository', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?order=asc')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({ sortOrder: 'asc' })
+      );
+    });
+
+    it('omits sortOrder for order=desc', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?order=desc')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(50, 0, undefined);
+    });
+
+    it('omits sortOrder when order is absent', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(50, 0, undefined);
+    });
+
+    it('falls back to newest-first for bogus order values', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?order=bogus')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(50, 0, undefined);
+    });
+
     it('returns flags on list and detail responses for viewer tokens', async () => {
       asMock(getWorldRepository).mockReturnValue(createMockRepo());
       asMock(getTokenRepository).mockReturnValue(

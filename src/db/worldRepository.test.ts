@@ -123,6 +123,71 @@ describe('world records', () => {
     });
   });
 
+  describe('getAllPaginated ordering', () => {
+    test('orders by tagged date (internal_add_date fallback created_at) desc by default, asc when asked', async () => {
+      await addWorld('wrld_old_created', 'guild-1');
+      await addWorld('wrld_mid', 'guild-1');
+      await addWorld('wrld_new_created', 'guild-1');
+
+      const repo = new WorldRepository(queryable);
+      await queryable.query(
+        `UPDATE world_records SET created_at = 100 WHERE world_id = 'wrld_old_created'`
+      );
+      await queryable.query(
+        `UPDATE world_records SET created_at = 200 WHERE world_id = 'wrld_mid'`
+      );
+      await queryable.query(
+        `UPDATE world_records SET created_at = 300 WHERE world_id = 'wrld_new_created'`
+      );
+      // Tagged newer than everything except wrld_old_created's original
+      // created_at would make created_at ordering diverge from COALESCE ordering
+      await queryable.query(
+        `UPDATE world_records SET internal_add_date = 400 WHERE world_id = 'wrld_old_created'`
+      );
+      await queryable.query(
+        `UPDATE world_records SET internal_add_date = 150 WHERE world_id = 'wrld_new_created'`
+      );
+
+      const desc = await repo.getAllPaginated(10, 0);
+      expect(desc.rows.map((r) => r.worldId)).toEqual([
+        'wrld_old_created',
+        'wrld_mid',
+        'wrld_new_created'
+      ]);
+
+      const asc = await repo.getAllPaginated(10, 0, { sortOrder: 'asc' });
+      expect(asc.rows.map((r) => r.worldId)).toEqual([
+        'wrld_new_created',
+        'wrld_mid',
+        'wrld_old_created'
+      ]);
+    });
+
+    test('falls back to created_at when internal_add_date is null', async () => {
+      await addWorld('wrld_a', 'guild-1');
+      await addWorld('wrld_b', 'guild-1');
+      await addWorld('wrld_c', 'guild-1');
+
+      const repo = new WorldRepository(queryable);
+      await queryable.query(
+        `UPDATE world_records SET created_at = 100 WHERE world_id = 'wrld_a'`
+      );
+      await queryable.query(
+        `UPDATE world_records SET created_at = 200 WHERE world_id = 'wrld_b'`
+      );
+      await queryable.query(
+        `UPDATE world_records SET created_at = 300 WHERE world_id = 'wrld_c'`
+      );
+
+      const page = await repo.getAllPaginated(10, 0);
+      expect(page.rows.map((r) => r.worldId)).toEqual([
+        'wrld_c',
+        'wrld_b',
+        'wrld_a'
+      ]);
+    });
+  });
+
   describe('flags on reads', () => {
     test('attachFlags returns flags ordered by flag and empty when none', async () => {
       await addWorld('wrld_abc', 'guild-1');

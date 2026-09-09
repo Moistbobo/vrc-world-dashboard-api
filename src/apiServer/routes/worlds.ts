@@ -88,6 +88,7 @@ router.get(
       worldIds?: string[];
       dayRange?: number;
       highPriorityOnly?: boolean;
+      sortOrder?: 'asc' | 'desc';
     } = {};
     if (tags) filters.tags = tags;
     if (excludeFlags) filters.excludeFlags = excludeFlags;
@@ -99,6 +100,7 @@ router.get(
     if (maxCapacity !== undefined) filters.maxCapacity = maxCapacity;
     if (dayRange > 0) filters.dayRange = dayRange;
     if (highPriority === true) filters.highPriorityOnly = true;
+    if (query.order === 'asc') filters.sortOrder = 'asc';
 
     const search =
       typeof query.search === 'string' ? query.search.trim() : undefined;
