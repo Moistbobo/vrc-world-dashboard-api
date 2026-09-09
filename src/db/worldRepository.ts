@@ -600,9 +600,11 @@ export class WorldRepository {
       worldIds?: string[];
       dayRange?: number;
       highPriorityOnly?: boolean;
+      sortOrder?: 'asc' | 'desc';
     }
   ): Promise<{ rows: WorldRecord[]; total: number }> {
     const { whereClause, params } = this.buildWhereClause(filters);
+    const orderDirection = filters?.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
     const countSql = `SELECT COUNT(*)::int as total FROM world_records wr ${whereClause}`;
     const selectSql = `
@@ -611,7 +613,7 @@ export class WorldRepository {
       LEFT JOIN high_priority_worlds hp
         ON hp.world_id = wr.world_id
       ${whereClause}
-      ORDER BY wr.created_at DESC LIMIT $${
+      ORDER BY COALESCE(wr.internal_add_date, wr.created_at) ${orderDirection} LIMIT $${
         params.length + 1
       } OFFSET $${params.length + 2}
     `;
