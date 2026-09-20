@@ -25,6 +25,7 @@ router.get(
     const platforms = parseStringListQuery(query.platform);
     const worldIds = parseStringListQuery(query.worldId);
     const excludeFlags = parseStringListQuery(query.exclude);
+    const qualityModes = parseStringListQuery(query.qualityMode);
 
     const quality = Array.isArray(query.quality)
       ? query.quality
@@ -82,6 +83,7 @@ router.get(
       excludeFlags?: string[];
       flagMode?: 'include' | 'exclude';
       quality?: ('good' | 'bad')[];
+      qualityMode?: 'exclude';
       search?: string;
       minCapacity?: number;
       maxCapacity?: number;
@@ -96,6 +98,7 @@ router.get(
     if (platforms) filters.platforms = platforms;
     if (worldIds) filters.worldIds = worldIds;
     if (quality) filters.quality = quality;
+    if (qualityModes?.includes('exclude')) filters.qualityMode = 'exclude';
     if (minCapacity !== undefined) filters.minCapacity = minCapacity;
     if (maxCapacity !== undefined) filters.maxCapacity = maxCapacity;
     if (dayRange > 0) filters.dayRange = dayRange;

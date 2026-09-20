@@ -331,6 +331,79 @@ describe('world records', () => {
     });
   });
 
+  describe('getAllPaginated qualityMode', () => {
+    test('exclude returns only unrated (NULL quality) worlds', async () => {
+      await addWorld('wrld_good', 'guild-1');
+      await addWorld('wrld_bad', 'guild-1');
+      await addWorld('wrld_unrated', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good', 'good');
+      await repo.updateQuality('wrld_bad', 'bad');
+
+      const page = await repo.getAllPaginated(10, 0, {
+        qualityMode: 'exclude'
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_unrated']);
+    });
+
+    test('exclude composes with other filters via AND', async () => {
+      await addWorld('wrld_unrated_horror', 'guild-1', ['horror']);
+      await addWorld('wrld_good_horror', 'guild-1', ['horror']);
+      await addWorld('wrld_unrated_chill', 'guild-1', ['chill']);
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good_horror', 'good');
+
+      const page = await repo.getAllPaginated(10, 0, {
+        qualityMode: 'exclude',
+        tags: ['horror']
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_unrated_horror']);
+    });
+
+    test('exclude wins over an inclusive quality list', async () => {
+      await addWorld('wrld_good', 'guild-1');
+      await addWorld('wrld_unrated', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good', 'good');
+
+      const page = await repo.getAllPaginated(10, 0, {
+        qualityMode: 'exclude',
+        quality: ['good']
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_unrated']);
+    });
+
+    test('absent qualityMode keeps the inclusive quality filter', async () => {
+      await addWorld('wrld_good', 'guild-1');
+      await addWorld('wrld_bad', 'guild-1');
+      await addWorld('wrld_unrated', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good', 'good');
+      await repo.updateQuality('wrld_bad', 'bad');
+
+      const page = await repo.getAllPaginated(10, 0, { quality: ['good'] });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_good']);
+    });
+
+    test('exclude with no unrated worlds returns an empty page', async () => {
+      await addWorld('wrld_good', 'guild-1');
+      await addWorld('wrld_bad', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good', 'good');
+      await repo.updateQuality('wrld_bad', 'bad');
+
+      const page = await repo.getAllPaginated(10, 0, {
+        qualityMode: 'exclude'
+      });
+      expect(page.total).toBe(0);
+      expect(page.rows).toEqual([]);
+    });
+  });
+
   describe('upsert', () => {
     test('a resubmission from a different guild updates the row and refreshes guild_id', async () => {
       await addWorld('wrld_abc', 'guild-1', ['horror']);
