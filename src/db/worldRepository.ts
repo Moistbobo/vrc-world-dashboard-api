@@ -451,6 +451,7 @@ export class WorldRepository {
     platforms?: string[];
     guildId?: string;
     quality?: ('good' | 'bad')[];
+    qualityMode?: 'exclude';
     search?: string;
     minCapacity?: number;
     maxCapacity?: number;
@@ -475,7 +476,9 @@ export class WorldRepository {
       params.push(...filters.worldIds);
     }
 
-    if (filters?.quality && filters.quality.length > 0) {
+    if (filters?.qualityMode === 'exclude') {
+      whereParts.push('wr.quality IS NULL');
+    } else if (filters?.quality && filters.quality.length > 0) {
       const start = params.length;
       const placeholders = filters.quality
         .map((_, i) => `$${start + i + 1}`)
@@ -594,6 +597,7 @@ export class WorldRepository {
       platforms?: string[];
       guildId?: string;
       quality?: ('good' | 'bad')[];
+      qualityMode?: 'exclude';
       search?: string;
       minCapacity?: number;
       maxCapacity?: number;

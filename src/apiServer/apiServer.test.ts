@@ -449,6 +449,112 @@ describe('API Server', () => {
       );
     });
 
+    it('passes qualityMode=exclude to repository and is allowed for viewer tokens', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?qualityMode=exclude')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({ qualityMode: 'exclude' })
+      );
+    });
+
+    it('omits qualityMode when absent', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.not.objectContaining({ qualityMode: 'exclude' })
+      );
+    });
+
+    it('treats unrecognized qualityMode values as absent', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?qualityMode=bogus')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.not.objectContaining({ qualityMode: 'exclude' })
+      );
+    });
+
+    it('honors exclude within repeated and comma-separated qualityMode values', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      await request(app)
+        .get('/api/worlds?qualityMode=exclude&qualityMode=exclude')
+        .set('authorization', 'Bearer test-token');
+      expect(getAllPaginated).toHaveBeenLastCalledWith(
+        50,
+        0,
+        expect.objectContaining({ qualityMode: 'exclude' })
+      );
+
+      await request(app)
+        .get('/api/worlds?qualityMode=include,exclude')
+        .set('authorization', 'Bearer test-token');
+      expect(getAllPaginated).toHaveBeenLastCalledWith(
+        50,
+        0,
+        expect.objectContaining({ qualityMode: 'exclude' })
+      );
+    });
+
+    it('composes qualityMode=exclude with other filters', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read', 'worlds:write'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?qualityMode=exclude&tag=chill&highPriority=true')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({
+          qualityMode: 'exclude',
+          tags: ['chill'],
+          highPriorityOnly: true
+        })
+      );
+    });
+
     it('passes order=asc to the repository', async () => {
       const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
       asMock(getWorldRepository).mockReturnValue(
