@@ -32,6 +32,13 @@ export default defineConfig([
     }
   },
   {
-    ignores: ['dist/**/*.js', 'node_modules', 'dist', '*.json', 'backup']
+    ignores: [
+      'dist/**/*.js',
+      'node_modules',
+      'dist',
+      '*.json',
+      'backup',
+      '.opencode'
+    ]
   }
 ]);
