@@ -12,146 +12,135 @@ const WORLD_TERMS = Config.WORLD_NAME_MATCHERS;
 // Configurable terms for author name extraction
 const AUTHOR_TERMS = Config.AUTHOR_NAME_MATCHERS;
 
-// Custom matchers for specific Twitter link patterns
-export const customMatchers = {
-  n4rGm5DmrVXXz6I: {
-    getWorldName: (content: string) => {
-      if (!content) return null;
-      const line = content.split('\n')[0]?.trim();
-      return line || null;
-    },
-    getAuthorName: (content: string) => {
-      if (!content) return null;
-      const line = content.split('\n')[1]?.trim();
-      return line || null;
+type NameExtractor = (content: string) => string | null;
+
+interface CustomMatcher {
+  getWorldName: NameExtractor;
+  getAuthorName: NameExtractor;
+}
+
+const firstLine: NameExtractor = (content) => {
+  if (!content) return null;
+  const line = content.split('\n')[0]?.trim();
+  return line || null;
+};
+
+const secondLine: NameExtractor = (content) => {
+  if (!content) return null;
+  const line = content.split('\n')[1]?.trim();
+  return line || null;
+};
+
+const secondLineAfterBy: NameExtractor = (content) => {
+  if (!content) return null;
+  const line = content.split('\n')[1]?.trim();
+  if (!line) return null;
+  const afterBy = line.replace(/^By\s*[:：]?\s*/i, '').trim();
+  return afterBy || null;
+};
+
+const japaneseLabeled =
+  (label: string): NameExtractor =>
+  (content) => {
+    if (!content) return null;
+    const re = new RegExp(`^${label}[\\s\\u3000]+(.+)$`);
+    for (const raw of content.split('\n')) {
+      const m = raw.trim().match(re);
+      if (m) return m[1].trim() || null;
     }
-  },
-  YSoSerious_VR: {
-    getWorldName: (content: string) => {
-      if (!content) return null;
-      const line = content.split('\n')[0]?.trim();
-      return line || null;
-    },
-    getAuthorName: (content: string) => {
-      if (!content) return null;
-      const line = content.split('\n')[1]?.trim();
-      if (!line) return null;
-      const afterBy = line.replace(/^By\s*[:：]?\s*/i, '').trim();
-      return afterBy || null;
-    }
-  },
-  tetra_moon: {
-    getWorldName: (content: string) => {
-      if (!content) return null;
-      for (const raw of content.split('\n')) {
-        const line = raw.trim();
-        const m = line.match(/^ワールド[\s\u3000]+(.+)$/);
-        if (m) return m[1].trim() || null;
-      }
-      return null;
-    },
-    getAuthorName: (content: string) => {
-      if (!content) return null;
-      for (const raw of content.split('\n')) {
-        const line = raw.trim();
-        const m = line.match(/^作者様[\s\u3000]+(.+)$/);
-        if (m) return m[1].trim() || null;
-      }
-      return null;
-    }
-  },
-  jhn_takashi2020: {
-    getWorldName: (content: string) => {
-      if (!content) return null;
-      const m = content.match(/WorldInfo\s*:\s*(?:\n\s*)*(.+?)\s+by\s+.+$/im);
-      return m?.[1]?.trim() ?? null;
-    },
-    getAuthorName: (content: string) => {
-      if (!content) return null;
-      const m = content.match(/WorldInfo\s*:\s*(?:\n\s*)*.+?\s+by\s+(.+)$/im);
-      return m?.[1]?.trim() ?? null;
-    }
-  },
-  yonesuke2: {
-    getWorldName: (content: string) => {
-      if (!content) return null;
-      const line = content.split('\n')[0]?.trim();
-      return line || null;
-    },
-    getAuthorName: (content: string) => {
-      if (!content) return null;
-      const line = content.split('\n')[1]?.trim();
-      if (!line) return null;
-      const afterBy = line.replace(/^By\s*[:：]?\s*/i, '').trim();
-      return afterBy || null;
-    }
-  },
-  Katu_VRC: {
-    getWorldName: (content: string) => {
-      if (!content) return null;
-      for (const raw of content.split('\n')) {
-        const line = raw.trim();
-        const m = line.match(/^ワールド\s*[:：]?\s*(.+)$/);
-        if (!m) continue;
-        const afterPrefix = m[1].trim();
-        const byMatches = [...afterPrefix.matchAll(/\bBy\s+/gi)];
-        const byMatch = byMatches[byMatches.length - 1];
+    return null;
+  };
+
+const worldInfoBeforeBy: NameExtractor = (content) => {
+  if (!content) return null;
+  const m = content.match(/WorldInfo\s*:\s*(?:\n\s*)*(.+?)\s+by\s+.+$/im);
+  return m?.[1]?.trim() ?? null;
+};
+
+const worldInfoAfterBy: NameExtractor = (content) => {
+  if (!content) return null;
+  const m = content.match(/WorldInfo\s*:\s*(?:\n\s*)*.+?\s+by\s+(.+)$/im);
+  return m?.[1]?.trim() ?? null;
+};
+
+const katuByPart =
+  (part: 'world' | 'author'): NameExtractor =>
+  (content) => {
+    if (!content) return null;
+    for (const raw of content.split('\n')) {
+      const m = raw.trim().match(/^ワールド\s*[:：]?\s*(.+)$/);
+      if (!m) continue;
+      const afterPrefix = m[1].trim();
+      const byMatches = [...afterPrefix.matchAll(/\bBy\s+/gi)];
+      const byMatch = byMatches[byMatches.length - 1];
+      if (part === 'world') {
         const name = byMatch
           ? afterPrefix.slice(0, byMatch.index).trim()
           : afterPrefix;
         return name || null;
       }
-      return null;
-    },
-    getAuthorName: (content: string) => {
-      if (!content) return null;
-      for (const raw of content.split('\n')) {
-        const line = raw.trim();
-        const m = line.match(/^ワールド\s*[:：]?\s*(.+)$/);
-        if (!m) continue;
-        const afterPrefix = m[1].trim();
-        const byMatches = [...afterPrefix.matchAll(/\bBy\s+/gi)];
-        const byMatch = byMatches[byMatches.length - 1];
-        if (!byMatch) return null;
-        const author = afterPrefix
-          .slice(byMatch.index! + byMatch[0].length)
-          .replace(/\s*#.*$/g, '')
-          .trim();
-        return author || null;
-      }
-      return null;
+      if (!byMatch) return null;
+      const author = afterPrefix
+        .slice(byMatch.index! + byMatch[0].length)
+        .replace(/\s*#.*$/g, '')
+        .trim();
+      return author || null;
     }
-  },
-  fox_yata9: {
-    getWorldName: (content: string) => {
-      if (!content) return null;
-      for (const raw of content.split('\n')) {
-        const line = raw.trim();
-        const m = line.match(/^World\s*[:：]\s*(.+)$/i);
-        if (m) {
-          const name = m[1]
-            .trim()
-            .replace(/\s*\(QUEST対応\)/g, '')
-            .replace(/\s*\(iOS対応\)/g, '')
-            .trim();
-          return name || null;
-        }
-      }
-      return null;
-    },
-    getAuthorName: (content: string) => {
-      if (!content) return null;
-      for (const raw of content.split('\n')) {
-        const line = raw.trim();
-        const m = line.match(/^By\s*[:：]\s*(.+)$/i);
-        if (m) {
-          const name = m[1].trim();
-          return name || null;
-        }
-      }
-      return null;
+    return null;
+  };
+
+const worldLineStripTags: NameExtractor = (content) => {
+  if (!content) return null;
+  for (const raw of content.split('\n')) {
+    const m = raw.trim().match(/^World\s*[:：]\s*(.+)$/i);
+    if (m) {
+      const name = m[1]
+        .trim()
+        .replace(/\s*\(QUEST対応\)/g, '')
+        .replace(/\s*\(iOS対応\)/g, '')
+        .trim();
+      return name || null;
     }
   }
+  return null;
+};
+
+const byLineValue: NameExtractor = (content) => {
+  if (!content) return null;
+  for (const raw of content.split('\n')) {
+    const m = raw.trim().match(/^By\s*[:：]\s*(.+)$/i);
+    if (m) {
+      const name = m[1].trim();
+      return name || null;
+    }
+  }
+  return null;
+};
+
+/**
+ * Creator-specific matchers keyed by the handle found in a tweet link.
+ *
+ * To add a matcher, add one keyed entry and point getWorldName and getAuthorName
+ * at an existing strategy above. Only add a new named strategy when no existing
+ * one matches the field's shape, and never inline a copy of a strategy body.
+ */
+export const customMatchers: Record<string, CustomMatcher> = {
+  n4rGm5DmrVXXz6I: { getWorldName: firstLine, getAuthorName: secondLine },
+  YSoSerious_VR: { getWorldName: firstLine, getAuthorName: secondLineAfterBy },
+  tetra_moon: {
+    getWorldName: japaneseLabeled('ワールド'),
+    getAuthorName: japaneseLabeled('作者様')
+  },
+  jhn_takashi2020: {
+    getWorldName: worldInfoBeforeBy,
+    getAuthorName: worldInfoAfterBy
+  },
+  yonesuke2: { getWorldName: firstLine, getAuthorName: secondLineAfterBy },
+  Katu_VRC: {
+    getWorldName: katuByPart('world'),
+    getAuthorName: katuByPart('author')
+  },
+  fox_yata9: { getWorldName: worldLineStripTags, getAuthorName: byLineValue }
 };
 
 export function extractWorldId(message: string): string | null {
