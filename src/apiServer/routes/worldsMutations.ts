@@ -191,12 +191,6 @@ router.put(
         .send({ error: 'Invalid body. Expected { flags }' });
     }
 
-    const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
-      return response.status(404).send({ error: 'World not found' });
-    }
-
     const { valid, invalid } = validateFlags(body.flags);
     if (invalid.length > 0) {
       return response.status(400).send({
@@ -204,12 +198,15 @@ router.put(
       });
     }
 
-    const updated = await getFlagRepository().replaceWorldFlags(
+    const result = await getFlagRepository().replaceWorldFlags(
       worldId,
       valid,
       request.token?.id
     );
-    response.send({ updated, flags: valid });
+    if (result.status === 'notFound') {
+      return response.status(404).send({ error: 'World not found' });
+    }
+    response.send({ updated: result.updated, flags: valid });
   }
 );
 
@@ -220,17 +217,14 @@ router.put(
   async (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
 
-    const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
-      return response.status(404).send({ error: 'World not found' });
-    }
-
-    const { added } = await getHighPriorityRepository().add(
+    const result = await getHighPriorityRepository().add(
       worldId,
       request.token?.id
     );
-    response.send({ added });
+    if (result.status === 'notFound') {
+      return response.status(404).send({ error: 'World not found' });
+    }
+    response.send({ added: result.added });
   }
 );
 
@@ -241,14 +235,11 @@ router.delete(
   async (request, response) => {
     const { worldId } = request.params as { worldId: string };
 
-    const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
+    const result = await getHighPriorityRepository().remove(worldId);
+    if (result.status === 'notFound') {
       return response.status(404).send({ error: 'World not found' });
     }
-
-    const { removed } = await getHighPriorityRepository().remove(worldId);
-    response.send({ removed });
+    response.send({ removed: result.removed });
   }
 );
 

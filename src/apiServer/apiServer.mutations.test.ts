@@ -63,6 +63,10 @@ vi.mock('../db/flagRepository', () => ({
   getFlagRepository: vi.fn()
 }));
 
+vi.mock('../db/highPriorityRepository', () => ({
+  getHighPriorityRepository: vi.fn()
+}));
+
 vi.mock('../vrchat/client', () => ({
   fetchWorldData: vi.fn(),
   isCurrentUser: vi.fn(),
@@ -77,6 +81,7 @@ import { extractAllWorldIdsFromMessage } from '../extraction/pipeline';
 import { extractTags, validateTags } from '../tags/extractor';
 import { validateFlags } from '../flags/taxonomy';
 import { getFlagRepository } from '../db/flagRepository';
+import { getHighPriorityRepository } from '../db/highPriorityRepository';
 import { createApiServer } from './index';
 
 const asMock = <T extends (...args: any[]) => any>(fn: any) =>
@@ -790,9 +795,10 @@ describe('API mutations', () => {
 
     it('returns 404 when world does not exist', async () => {
       mockTokenRepo(tagsWritePermissions);
-      asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldId: vi.fn(() => undefined) })
-      );
+      asMock(validateFlags).mockReturnValue({ valid: ['furry'], invalid: [] });
+      asMock(getFlagRepository).mockReturnValue({
+        replaceWorldFlags: vi.fn(() => ({ status: 'notFound' }))
+      } as never);
 
       const response = await request(app)
         .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
@@ -808,9 +814,6 @@ describe('API mutations', () => {
         valid: [],
         invalid: ['nope', 'also-nope']
       });
-      asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldId: vi.fn(() => ({})) })
-      );
 
       const response = await request(app)
         .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
@@ -829,10 +832,10 @@ describe('API mutations', () => {
         valid: ['furry', 'booth slop'],
         invalid: []
       });
-      const replaceWorldFlags = vi.fn(() => true);
-      asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldId: vi.fn(() => ({})) })
-      );
+      const replaceWorldFlags = vi.fn(() => ({
+        status: 'ok',
+        updated: true
+      }));
       asMock(getFlagRepository).mockReturnValue({
         replaceWorldFlags
       } as never);
@@ -857,11 +860,8 @@ describe('API mutations', () => {
     it('returns 200 with updated: false when flags are unchanged', async () => {
       mockTokenRepo(tagsWritePermissions);
       asMock(validateFlags).mockReturnValue({ valid: ['furry'], invalid: [] });
-      asMock(getWorldRepository).mockReturnValue(
-        createMockRepo({ getByWorldId: vi.fn(() => ({})) })
-      );
       asMock(getFlagRepository).mockReturnValue({
-        replaceWorldFlags: vi.fn(() => false)
+        replaceWorldFlags: vi.fn(() => ({ status: 'ok', updated: false }))
       } as never);
 
       const response = await request(app)
@@ -871,6 +871,65 @@ describe('API mutations', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ updated: false, flags: ['furry'] });
+    });
+  });
+
+  describe('mutation routes own the existence check', () => {
+    it('never calls getByWorldId', async () => {
+      mockTokenRepo([
+        'worlds:read',
+        'tags:read',
+        'meta:read',
+        'worlds:write',
+        'tags:write'
+      ]);
+      const getByWorldId = vi.fn();
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          getByWorldId,
+          updateQuality: vi.fn(() => ({ status: 'ok', updated: true })),
+          updateTags: vi.fn(() => ({ status: 'ok', updated: true })),
+          updateTagsOnly: vi.fn(() => ({ status: 'ok', updated: true })),
+          deleteByWorldId: vi.fn(() => ({ status: 'ok' }))
+        })
+      );
+      asMock(extractTags).mockReturnValue(['horror']);
+      asMock(validateTags).mockReturnValue({ valid: ['horror'], invalid: [] });
+      asMock(validateFlags).mockReturnValue({ valid: ['furry'], invalid: [] });
+      asMock(getFlagRepository).mockReturnValue({
+        replaceWorldFlags: vi.fn(() => ({ status: 'ok', updated: true }))
+      } as never);
+      asMock(getHighPriorityRepository).mockReturnValue({
+        add: vi.fn(() => ({ status: 'ok', added: true })),
+        remove: vi.fn(() => ({ status: 'ok', removed: true }))
+      } as never);
+
+      const worldId = VALID_BODY.worldId;
+      await request(app)
+        .put(`/api/worlds/${worldId}/quality`)
+        .set(AUTH)
+        .send({ quality: 'good' });
+      await request(app)
+        .put(`/api/worlds/${worldId}/tags`)
+        .set(AUTH)
+        .send({ sourceContent: 'Tags: horror' });
+      await request(app)
+        .put(`/api/worlds/${worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ tags: ['horror'] });
+      await request(app)
+        .put(`/api/worlds/${worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ flags: ['furry'] });
+      await request(app)
+        .put(`/api/worlds/${worldId}/high-priority`)
+        .set(AUTH);
+      await request(app).delete(`/api/worlds/${worldId}`).set(AUTH);
+      await request(app)
+        .delete(`/api/worlds/${worldId}/high-priority`)
+        .set(AUTH);
+
+      expect(getByWorldId).not.toHaveBeenCalled();
     });
   });
 
