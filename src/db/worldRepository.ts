@@ -1,6 +1,7 @@
 import type { Queryable } from './client';
 import { getQueryable } from './pool';
 import { toNumber, toNumberOrNull, toArray } from './mappers';
+import type { MutationResult } from './mutationResult';
 import logger from '../logger';
 
 export interface WorldRecord {
@@ -278,12 +279,12 @@ export class WorldRepository {
 
   /**
    * Move a world record to the deleted_world_records archive table,
-   * then remove it from the live table. Returns true if a row existed.
+   * then remove it from the live table. Reports notFound when no row existed.
    */
-  async deleteByWorldId(worldId: string): Promise<boolean> {
+  async deleteByWorldId(worldId: string): Promise<MutationResult> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     const archiveSql = `
@@ -320,7 +321,7 @@ export class WorldRepository {
         `Archived world record ${worldId} into deleted_world_records`
       );
     }
-    return didDelete;
+    return { status: 'ok' };
   }
 
   /**
@@ -331,17 +332,17 @@ export class WorldRepository {
   async updateQuality(
     worldId: string,
     quality: 'good' | 'bad' | null
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     if (existing.quality === quality) {
       logger.debug(
         `Skipping quality update for world ${worldId}: already "${quality}"`
       );
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     const result = await this.db.query(
@@ -354,7 +355,7 @@ export class WorldRepository {
     if (didUpdate) {
       logger.info(`Set quality to "${quality}" for world ${worldId}`);
     }
-    return didUpdate;
+    return { status: 'ok', updated: didUpdate };
   }
 
   /**
@@ -367,10 +368,10 @@ export class WorldRepository {
     tags: string[],
     sourceContent: string | null,
     addedByTokenId?: number
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     const tagsChanged = JSON.stringify(existing.tags) !== JSON.stringify(tags);
@@ -378,7 +379,7 @@ export class WorldRepository {
 
     if (!tagsChanged && !sourceChanged) {
       logger.debug(`Skipping tag update for world ${worldId}: no changes`);
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     await this.db.withTransaction(async (tx) => {
@@ -396,7 +397,7 @@ export class WorldRepository {
     });
 
     logger.info(`Updated tags for world ${worldId}: [${tags.join(', ')}]`);
-    return true;
+    return { status: 'ok', updated: true };
   }
 
   /**
@@ -407,17 +408,17 @@ export class WorldRepository {
     worldId: string,
     tags: string[],
     addedByTokenId?: number
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     if (JSON.stringify(existing.tags) === JSON.stringify(tags)) {
       logger.debug(
         `Skipping tag-only update for world ${worldId}: tags unchanged`
       );
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     await this.db.withTransaction(async (tx) => {
@@ -431,7 +432,7 @@ export class WorldRepository {
     });
 
     logger.info(`Updated tags for world ${worldId}: [${tags.join(', ')}]`);
-    return true;
+    return { status: 'ok', updated: true };
   }
 
   /**
