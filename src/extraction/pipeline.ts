@@ -205,6 +205,11 @@ export const filterWorldsWithAuthorName = (
   data: LimitedWorld[],
   authorName: string
 ): LimitedWorld | undefined => {
-  const authorNames = data.map((world) => world.authorName);
-  return data[authorNames.indexOf(closest(authorName, authorNames))];
+  const candidates = data.filter((world) => world.authorName !== '');
+  if (candidates.length === 0) return undefined;
+
+  const candidateNames = candidates.map((world) => world.authorName);
+  return candidates[
+    candidateNames.indexOf(closest(authorName, candidateNames))
+  ];
 };

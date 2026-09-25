@@ -223,10 +223,28 @@ describe('filterWorldsWithAuthorName', () => {
     ).toThrow();
   });
 
-  it('returns a sole item with an empty authorName instead of undefined', () => {
+  it('ignores empty author names when selecting the closest match', () => {
+    const data = [
+      makeLimitedWorld('wrld_blank', 'World A', ''),
+      makeLimitedWorld('wrld_alice', 'World B', 'Alice')
+    ];
+
+    expect(filterWorldsWithAuthorName(data, 'Alice')?.id).toBe('wrld_alice');
+  });
+
+  it('does not return an empty-author entry even when it is closest', () => {
+    const data = [
+      makeLimitedWorld('wrld_alice', 'World A', 'Alice'),
+      makeLimitedWorld('wrld_blank', 'World B', '')
+    ];
+
+    expect(filterWorldsWithAuthorName(data, 'Bob')?.id).toBe('wrld_alice');
+  });
+
+  it('returns undefined when every author name is empty', () => {
     const data = [makeLimitedWorld('wrld_blank', 'World A', '')];
 
-    expect(filterWorldsWithAuthorName(data, 'Alice')?.id).toBe('wrld_blank');
+    expect(filterWorldsWithAuthorName(data, 'Alice')).toBeUndefined();
   });
 });
 
