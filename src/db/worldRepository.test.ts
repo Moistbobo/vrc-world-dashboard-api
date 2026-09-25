@@ -1,9 +1,24 @@
+import type { QueryResult } from 'pg';
+import type { Queryable } from './client';
 import { runMigrations } from './schema';
 import { createTestDb, type TestDb } from './testUtils';
 import { WorldRepository, type WorldRecord } from './worldRepository';
 import { FlagRepository } from './flagRepository';
 import { RoleRepository } from './roleRepository';
 import { TokenRepository } from './tokenRepository';
+
+function queryableWithWinningConcurrentDelete(base: Queryable): Queryable {
+  const wrap = (q: Queryable): Queryable =>
+    ({
+      query: (text: string, values?: unknown[]) =>
+        text.startsWith('DELETE FROM world_records')
+          ? Promise.resolve({ rows: [], rowCount: 0 } as unknown as QueryResult)
+          : q.query(text, values),
+      withTransaction: (fn: (tx: Queryable) => Promise<unknown>) =>
+        q.withTransaction((tx) => fn(wrap(tx)))
+    }) as unknown as Queryable;
+  return wrap(base);
+}
 
 describe('world records', () => {
   let queryable: TestDb['queryable'];
@@ -183,6 +198,41 @@ describe('world records', () => {
       expect(await repo.updateTagsOnly('wrld_missing', ['horror'])).toEqual({
         status: 'notFound'
       });
+    });
+  });
+
+  describe('deleteByWorldId', () => {
+    test('reports notFound when no row was deleted', async () => {
+      const repo = new WorldRepository(queryable);
+
+      expect(await repo.deleteByWorldId('wrld_missing')).toEqual({
+        status: 'notFound'
+      });
+    });
+
+    test('reports notFound when the delete affects no rows', async () => {
+      await addWorld('wrld_abc', 'guild-1');
+      const repo = new WorldRepository(
+        queryableWithWinningConcurrentDelete(queryable)
+      );
+
+      expect(await repo.deleteByWorldId('wrld_abc')).toEqual({
+        status: 'notFound'
+      });
+    });
+
+    test('reports ok, removes the record, and archives it', async () => {
+      await addWorld('wrld_abc', 'guild-1', ['horror']);
+      const repo = new WorldRepository(queryable);
+
+      expect(await repo.deleteByWorldId('wrld_abc')).toEqual({ status: 'ok' });
+      expect(await repo.getByWorldId('wrld_abc')).toBeUndefined();
+
+      const archived = await queryable.query<{ tags: string[] }>(
+        `SELECT tags FROM deleted_world_records WHERE world_id = $1`,
+        ['wrld_abc']
+      );
+      expect(archived.rows[0]?.tags).toEqual(['horror']);
     });
   });
 
