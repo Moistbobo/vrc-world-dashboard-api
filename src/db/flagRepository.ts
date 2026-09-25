@@ -1,5 +1,6 @@
 import type { Queryable } from './client';
 import { getQueryable } from './pool';
+import type { MutationResult } from './mutationResult';
 
 export class FlagRepository {
   private db: Queryable;
@@ -26,43 +27,59 @@ export class FlagRepository {
   /**
    * Replace the flags on a world with the given set. Deletes existing junction
    * rows for the world, then inserts one row per flag. Must run inside a
-   * transaction so a partial replacement cannot be observed. Returns whether
-   * anything changed; replaying the same set is a no-op that returns false.
+   * transaction so a partial replacement cannot be observed. Reports notFound
+   * when the world row is absent; replaying the same set is a no-op.
    */
   async replaceWorldFlags(
     worldId: string,
     flags: string[],
     addedByTokenId?: number
-  ): Promise<boolean> {
-    return this.db.withTransaction(async (tx) => {
-      const existing = await tx.query<{ flag: string }>(
-        `SELECT flag FROM world_flags WHERE world_id = $1`,
-        [worldId]
-      );
-      const existingSet = new Set(existing.rows.map((r) => r.flag));
-      const newSet = new Set(flags);
-      const unchanged =
-        existingSet.size === newSet.size &&
-        flags.every((f) => existingSet.has(f));
-      if (unchanged) {
-        return false;
-      }
+  ): Promise<MutationResult<{ updated: boolean }>> {
+    return this.db.withTransaction<MutationResult<{ updated: boolean }>>(
+      async (tx) => {
+        const world = await tx.query(
+          `SELECT 1 FROM world_records WHERE world_id = $1`,
+          [worldId]
+        );
+        if (world.rows.length === 0) {
+          return { status: 'notFound' };
+        }
 
-      await tx.query(`DELETE FROM world_flags WHERE world_id = $1`, [worldId]);
-      if (flags.length === 0) {
-        return true;
+        const existing = await tx.query<{ flag: string }>(
+          `SELECT flag FROM world_flags WHERE world_id = $1`,
+          [worldId]
+        );
+        const existingSet = new Set(existing.rows.map((r) => r.flag));
+        const newSet = new Set(flags);
+        const unchanged =
+          existingSet.size === newSet.size &&
+          flags.every((f) => existingSet.has(f));
+        if (unchanged) {
+          return { status: 'ok', updated: false };
+        }
+
+        await tx.query(`DELETE FROM world_flags WHERE world_id = $1`, [
+          worldId
+        ]);
+        if (flags.length === 0) {
+          return { status: 'ok', updated: true };
+        }
+        const values = flags.flatMap((f) => [
+          worldId,
+          f,
+          addedByTokenId ?? null
+        ]);
+        const placeholders = flags
+          .map((_, i) => `($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`)
+          .join(', ');
+        await tx.query(
+          `INSERT INTO world_flags (world_id, flag, added_by_token_id)
+           VALUES ${placeholders}`,
+          values
+        );
+        return { status: 'ok', updated: true };
       }
-      const values = flags.flatMap((f) => [worldId, f, addedByTokenId ?? null]);
-      const placeholders = flags
-        .map((_, i) => `($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`)
-        .join(', ');
-      await tx.query(
-        `INSERT INTO world_flags (world_id, flag, added_by_token_id)
-         VALUES ${placeholders}`,
-        values
-      );
-      return true;
-    });
+    );
   }
 
   async countByFlag(): Promise<{ flag: string; count: number }[]> {

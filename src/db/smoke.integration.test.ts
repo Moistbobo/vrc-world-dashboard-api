@@ -206,7 +206,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
         ['space', 'chill'],
         curatorRecord.id
       );
-      expect(updated).toBe(true);
+      expect(updated).toEqual({ status: 'ok', updated: true });
       expect((await repo.getByWorldId('wrld_kino'))?.tags).toEqual([
         'space',
         'chill'
@@ -256,7 +256,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
       const repo = new WorldRepository(createQueryable(pool));
 
       const deleted = await repo.deleteByWorldId('wrld_empty');
-      expect(deleted).toBe(true);
+      expect(deleted).toEqual({ status: 'ok' });
 
       const q = createQueryable(pool);
       const remaining = await q.query<{ world_id: string }>(

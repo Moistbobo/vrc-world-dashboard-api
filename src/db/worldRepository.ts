@@ -1,6 +1,7 @@
 import type { Queryable } from './client';
 import { getQueryable } from './pool';
 import { toNumber, toNumberOrNull, toArray } from './mappers';
+import type { MutationResult } from './mutationResult';
 import logger from '../logger';
 
 export interface WorldRecord {
@@ -277,50 +278,52 @@ export class WorldRepository {
   }
 
   /**
-   * Move a world record to the deleted_world_records archive table,
-   * then remove it from the live table. Returns true if a row existed.
+   * Remove a world record from the live table and archive it into
+   * deleted_world_records. Reports notFound when the delete affected no row.
    */
-  async deleteByWorldId(worldId: string): Promise<boolean> {
-    const existing = await this.getByWorldId(worldId);
-    if (!existing) {
-      return false;
-    }
-
+  async deleteByWorldId(worldId: string): Promise<MutationResult> {
     const archiveSql = `
       INSERT INTO deleted_world_records
         (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, internal_add_date, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     `;
-    const deleteSql = `DELETE FROM world_records WHERE world_id = $1`;
+    const deleteSql = `DELETE FROM world_records WHERE world_id = $1 RETURNING *`;
 
     const didDelete = await this.db.withTransaction(async (tx) => {
+      const tagsResult = await tx.query<{ tag: string }>(
+        `SELECT tag FROM world_tags WHERE world_id = $1 ORDER BY added_at, id`,
+        [worldId]
+      );
+      const result = await tx.query<WorldRow>(deleteSql, [worldId]);
+      if ((result.rowCount ?? 0) === 0) {
+        return false;
+      }
+      const row = result.rows[0];
       await tx.query(archiveSql, [
-        existing.worldId,
-        existing.guildId,
-        existing.messageId,
-        existing.name,
-        existing.authorName,
-        existing.capacity,
-        existing.platforms,
-        existing.tags,
-        existing.imageUrl,
-        existing.sourceContent,
-        existing.vrchatData,
-        existing.packageSizes,
-        existing.internalAddDate ?? null,
-        existing.createdAt ?? null,
-        existing.updatedAt ?? null
+        row.world_id,
+        row.guild_id,
+        row.message_id,
+        row.name,
+        row.author_name,
+        row.capacity,
+        row.platforms,
+        tagsResult.rows.map((r) => r.tag),
+        row.image_url,
+        row.source_content,
+        row.vrchat_data,
+        row.package_sizes,
+        row.internal_add_date ?? null,
+        row.created_at,
+        row.updated_at
       ]);
-      const result = await tx.query(deleteSql, [worldId]);
-      return (result.rowCount ?? 0) > 0;
+      return true;
     });
 
-    if (didDelete) {
-      logger.info(
-        `Archived world record ${worldId} into deleted_world_records`
-      );
+    if (!didDelete) {
+      return { status: 'notFound' };
     }
-    return didDelete;
+    logger.info(`Archived world record ${worldId} into deleted_world_records`);
+    return { status: 'ok' };
   }
 
   /**
@@ -331,17 +334,17 @@ export class WorldRepository {
   async updateQuality(
     worldId: string,
     quality: 'good' | 'bad' | null
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     if (existing.quality === quality) {
       logger.debug(
         `Skipping quality update for world ${worldId}: already "${quality}"`
       );
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     const result = await this.db.query(
@@ -354,7 +357,7 @@ export class WorldRepository {
     if (didUpdate) {
       logger.info(`Set quality to "${quality}" for world ${worldId}`);
     }
-    return didUpdate;
+    return { status: 'ok', updated: didUpdate };
   }
 
   /**
@@ -367,10 +370,10 @@ export class WorldRepository {
     tags: string[],
     sourceContent: string | null,
     addedByTokenId?: number
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     const tagsChanged = JSON.stringify(existing.tags) !== JSON.stringify(tags);
@@ -378,7 +381,7 @@ export class WorldRepository {
 
     if (!tagsChanged && !sourceChanged) {
       logger.debug(`Skipping tag update for world ${worldId}: no changes`);
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     await this.db.withTransaction(async (tx) => {
@@ -396,7 +399,7 @@ export class WorldRepository {
     });
 
     logger.info(`Updated tags for world ${worldId}: [${tags.join(', ')}]`);
-    return true;
+    return { status: 'ok', updated: true };
   }
 
   /**
@@ -407,17 +410,17 @@ export class WorldRepository {
     worldId: string,
     tags: string[],
     addedByTokenId?: number
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     if (JSON.stringify(existing.tags) === JSON.stringify(tags)) {
       logger.debug(
         `Skipping tag-only update for world ${worldId}: tags unchanged`
       );
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     await this.db.withTransaction(async (tx) => {
@@ -431,7 +434,7 @@ export class WorldRepository {
     });
 
     logger.info(`Updated tags for world ${worldId}: [${tags.join(', ')}]`);
-    return true;
+    return { status: 'ok', updated: true };
   }
 
   /**

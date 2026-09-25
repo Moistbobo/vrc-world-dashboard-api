@@ -112,8 +112,8 @@ describe('High priority worlds API', () => {
 
   function mockHpRepo(overrides: Record<string, unknown> = {}) {
     asMock(getHighPriorityRepository).mockReturnValue({
-      add: vi.fn(() => ({ added: true })),
-      remove: vi.fn(() => ({ removed: true })),
+      add: vi.fn(() => ({ status: 'ok', added: true })),
+      remove: vi.fn(() => ({ status: 'ok', removed: true })),
       ...overrides
     });
   }
@@ -161,7 +161,7 @@ describe('High priority worlds API', () => {
     });
 
     it('returns 404 when the world does not exist', async () => {
-      mockWorldRepo({ getByWorldId: vi.fn(() => undefined) });
+      mockHpRepo({ add: vi.fn(() => ({ status: 'notFound' })) });
 
       const response = await request(app)
         .put(`/api/worlds/${WORLD_ID}/high-priority`)
@@ -175,8 +175,8 @@ describe('High priority worlds API', () => {
     it('returns 200 with added: true then added: false on repeat', async () => {
       const add = vi
         .fn()
-        .mockReturnValueOnce({ added: true })
-        .mockReturnValueOnce({ added: false });
+        .mockReturnValueOnce({ status: 'ok', added: true })
+        .mockReturnValueOnce({ status: 'ok', added: false });
       asMock(getHighPriorityRepository).mockReturnValue({ add });
 
       const first = await request(app)
@@ -229,7 +229,7 @@ describe('High priority worlds API', () => {
     });
 
     it('returns 404 when the world does not exist', async () => {
-      mockWorldRepo({ getByWorldId: vi.fn(() => undefined) });
+      mockHpRepo({ remove: vi.fn(() => ({ status: 'notFound' })) });
 
       const response = await request(app)
         .delete(`/api/worlds/${WORLD_ID}/high-priority`)
@@ -243,8 +243,8 @@ describe('High priority worlds API', () => {
     it('returns 200 with removed: true then removed: false on repeat', async () => {
       const remove = vi
         .fn()
-        .mockReturnValueOnce({ removed: true })
-        .mockReturnValueOnce({ removed: false });
+        .mockReturnValueOnce({ status: 'ok', removed: true })
+        .mockReturnValueOnce({ status: 'ok', removed: false });
       asMock(getHighPriorityRepository).mockReturnValue({ remove });
 
       const first = await request(app)
