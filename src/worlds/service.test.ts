@@ -135,6 +135,25 @@ describe('addWorld', () => {
     expect(result.status).toBe('created');
   });
 
+  it('threads the token id into upsert', async () => {
+    const upsert = vi.fn();
+    asMock(getWorldRepository).mockReturnValue({
+      getByWorldId: vi.fn(() => undefined),
+      upsert
+    });
+    asMock(fetchWorldData).mockResolvedValue(WORLD_DATA as never);
+    asMock(extractTags).mockReturnValue(['horror']);
+    asMock(getPackageSizesInMb).mockResolvedValue([]);
+
+    await addWorld({ ...REQUEST, addedByTokenId: 7 });
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    expect(upsert.mock.calls[0][0]).toMatchObject({
+      worldId: REQUEST.worldId
+    });
+    expect(upsert.mock.calls[0][1]).toBe(7);
+  });
+
   it('uses the provided messageTimestamp for internalAddDate', async () => {
     asMock(getWorldRepository).mockReturnValue({
       getByWorldId: vi.fn(() => undefined),
