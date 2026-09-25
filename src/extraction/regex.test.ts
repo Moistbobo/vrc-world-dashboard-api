@@ -419,6 +419,36 @@ describe('regex', () => {
     });
   });
 
+  describe('shared matcher strategies', () => {
+    it('exposes getWorldName and getAuthorName as functions for every matcher', () => {
+      for (const matcher of Object.values(customMatchers)) {
+        expect(typeof matcher.getWorldName).toBe('function');
+        expect(typeof matcher.getAuthorName).toBe('function');
+      }
+    });
+
+    it('reuses firstLine across matchers that read the first line', () => {
+      expect(customMatchers.n4rGm5DmrVXXz6I.getWorldName).toBe(
+        customMatchers.YSoSerious_VR.getWorldName
+      );
+      expect(customMatchers.YSoSerious_VR.getWorldName).toBe(
+        customMatchers.yonesuke2.getWorldName
+      );
+    });
+
+    it('reuses secondLineAfterBy across matchers that strip By from the second line', () => {
+      expect(customMatchers.YSoSerious_VR.getAuthorName).toBe(
+        customMatchers.yonesuke2.getAuthorName
+      );
+    });
+
+    it('creates a distinct japaneseLabeled extractor per label', () => {
+      expect(customMatchers.tetra_moon.getWorldName).not.toBe(
+        customMatchers.tetra_moon.getAuthorName
+      );
+    });
+  });
+
   describe('extractWithCustomMatcher', () => {
     const ysoTweet =
       'day by day\n' +
