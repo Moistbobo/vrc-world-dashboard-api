@@ -158,9 +158,9 @@ describe('world records', () => {
       await addWorld('wrld_abc', 'guild-1', ['kino'], 'original source');
       const repo = new WorldRepository(queryable);
 
-      expect(
-        await repo.updateTagsOnly('wrld_abc', ['horror', 'game'])
-      ).toEqual({ status: 'ok', updated: true });
+      expect(await repo.updateTagsOnly('wrld_abc', ['horror', 'game'])).toEqual(
+        { status: 'ok', updated: true }
+      );
 
       const record = (await repo.getByWorldId('wrld_abc'))!;
       expect(record.tags).toEqual(['horror', 'game']);

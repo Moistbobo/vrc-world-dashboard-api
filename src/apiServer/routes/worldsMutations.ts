@@ -166,11 +166,7 @@ router.put(
     }
 
     const repo = getWorldRepository();
-    const result = await repo.updateTagsOnly(
-      worldId,
-      valid,
-      request.token?.id
-    );
+    const result = await repo.updateTagsOnly(worldId, valid, request.token?.id);
     if (result.status === 'notFound') {
       return response.status(404).send({ error: 'World not found' });
     }

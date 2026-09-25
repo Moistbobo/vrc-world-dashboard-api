@@ -1,3 +1,2 @@
 export type MutationResult<T extends object = object> =
-  | { status: 'notFound' }
-  | ({ status: 'ok' } & T);
+  { status: 'notFound' } | ({ status: 'ok' } & T);

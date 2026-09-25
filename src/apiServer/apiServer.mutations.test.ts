@@ -921,9 +921,7 @@ describe('API mutations', () => {
         .put(`/api/worlds/${worldId}/flags/edit`)
         .set(AUTH)
         .send({ flags: ['furry'] });
-      await request(app)
-        .put(`/api/worlds/${worldId}/high-priority`)
-        .set(AUTH);
+      await request(app).put(`/api/worlds/${worldId}/high-priority`).set(AUTH);
       await request(app).delete(`/api/worlds/${worldId}`).set(AUTH);
       await request(app)
         .delete(`/api/worlds/${worldId}/high-priority`)
