@@ -7,7 +7,8 @@ import {
   extractWithCustomMatcher,
   extractAllWorldIds,
   extractAllLinks,
-  isTwitterLink
+  isTwitterLink,
+  removeLinksFromTweet
 } from './regex';
 
 // Mock the config to avoid environment variable dependencies
@@ -583,7 +584,7 @@ describe('regex', () => {
       ).toBeNull();
     });
 
-    it('returns null for invalid inputs', () => {
+    it('returns null when inputs are empty or falsy', () => {
       expect(extractWithCustomMatcher('', ysoTweet)).toBeNull();
       expect(
         extractWithCustomMatcher('https://twitter.com/YSoSerious_VR', '')
@@ -600,12 +601,15 @@ describe('regex', () => {
       expect(
         extractWithCustomMatcher(123 as unknown as string, ysoTweet)
       ).toBeNull();
-      expect(
+    });
+
+    it('propagates a type violation from a matching matcher', () => {
+      expect(() =>
         extractWithCustomMatcher(
           'https://twitter.com/YSoSerious_VR',
           123 as unknown as string
         )
-      ).toBeNull();
+      ).toThrow();
     });
   });
 
@@ -783,6 +787,26 @@ describe('regex', () => {
 
     it('finds an id embedded in a filename', () => {
       expect(extractAllWorldIds(`screenshot-${id1}.png`)).toEqual([id1]);
+    });
+  });
+
+  describe('removeLinksFromTweet', () => {
+    it('strips http, https, and www links then trims', () => {
+      expect(
+        removeLinksFromTweet('World: Tokyo Mood https://t.co/abc By: Alice')
+      ).toBe('World: Tokyo Mood  By: Alice');
+      expect(removeLinksFromTweet('Visit www.example.com now')).toBe(
+        'Visit  now'
+      );
+      expect(removeLinksFromTweet('  padded https://a.com  ')).toBe('padded');
+    });
+
+    it('leaves content without links untouched apart from trimming', () => {
+      expect(removeLinksFromTweet('  plain text  ')).toBe('plain text');
+    });
+
+    it('throws for non-string content', () => {
+      expect(() => removeLinksFromTweet(null as never)).toThrow();
     });
   });
 });
