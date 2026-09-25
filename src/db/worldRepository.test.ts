@@ -118,7 +118,10 @@ describe('world records', () => {
     test('sets quality to good', async () => {
       await addWorld('wrld_abc', 'guild-1');
       const repo = new WorldRepository(queryable);
-      expect(await repo.updateQuality('wrld_abc', 'good')).toBe(true);
+      expect(await repo.updateQuality('wrld_abc', 'good')).toEqual({
+        status: 'ok',
+        updated: true
+      });
       expect((await repo.getByWorldId('wrld_abc'))?.quality).toBe('good');
     });
 
@@ -126,19 +129,27 @@ describe('world records', () => {
       await addWorld('wrld_abc', 'guild-1');
       const repo = new WorldRepository(queryable);
       await repo.updateQuality('wrld_abc', 'good');
-      expect(await repo.updateQuality('wrld_abc', null)).toBe(true);
+      expect(await repo.updateQuality('wrld_abc', null)).toEqual({
+        status: 'ok',
+        updated: true
+      });
       expect((await repo.getByWorldId('wrld_abc'))?.quality).toBeNull();
     });
 
     test('clearing an already-null quality reports unchanged', async () => {
       await addWorld('wrld_abc', 'guild-1');
       const repo = new WorldRepository(queryable);
-      expect(await repo.updateQuality('wrld_abc', null)).toBe(false);
+      expect(await repo.updateQuality('wrld_abc', null)).toEqual({
+        status: 'ok',
+        updated: false
+      });
     });
 
-    test('returns false when the world does not exist', async () => {
+    test('reports notFound when the world does not exist', async () => {
       const repo = new WorldRepository(queryable);
-      expect(await repo.updateQuality('wrld_abc', 'good')).toBe(false);
+      expect(await repo.updateQuality('wrld_abc', 'good')).toEqual({
+        status: 'notFound'
+      });
     });
   });
 
@@ -147,26 +158,31 @@ describe('world records', () => {
       await addWorld('wrld_abc', 'guild-1', ['kino'], 'original source');
       const repo = new WorldRepository(queryable);
 
-      expect(await repo.updateTagsOnly('wrld_abc', ['horror', 'game'])).toBe(
-        true
-      );
+      expect(
+        await repo.updateTagsOnly('wrld_abc', ['horror', 'game'])
+      ).toEqual({ status: 'ok', updated: true });
 
       const record = (await repo.getByWorldId('wrld_abc'))!;
       expect(record.tags).toEqual(['horror', 'game']);
       expect(record.sourceContent).toBe('original source');
     });
 
-    test('returns false when the tags are unchanged', async () => {
+    test('reports unchanged when the tags are unchanged', async () => {
       await addWorld('wrld_abc', 'guild-1', ['horror']);
       const repo = new WorldRepository(queryable);
 
-      expect(await repo.updateTagsOnly('wrld_abc', ['horror'])).toBe(false);
+      expect(await repo.updateTagsOnly('wrld_abc', ['horror'])).toEqual({
+        status: 'ok',
+        updated: false
+      });
     });
 
-    test('returns false when the record does not exist', async () => {
+    test('reports notFound when the record does not exist', async () => {
       const repo = new WorldRepository(queryable);
 
-      expect(await repo.updateTagsOnly('wrld_missing', ['horror'])).toBe(false);
+      expect(await repo.updateTagsOnly('wrld_missing', ['horror'])).toEqual({
+        status: 'notFound'
+      });
     });
   });
 
