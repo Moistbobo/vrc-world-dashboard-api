@@ -120,9 +120,13 @@ run('Postgres integration', () => {
 
   test('high-priority add is idempotent via rowCount', async () => {
     const hp = new HighPriorityRepository(createQueryable(pool));
-    expect(await hp.add('wrld_it1')).toEqual({ added: true });
-    expect(await hp.add('wrld_it1')).toEqual({ added: false });
-    expect(await hp.remove('wrld_it1')).toEqual({ removed: true });
+    expect(await hp.add('wrld_it1')).toEqual({ status: 'ok', added: true });
+    expect(await hp.add('wrld_it1')).toEqual({ status: 'ok', added: false });
+    expect(await hp.remove('wrld_it1')).toEqual({
+      status: 'ok',
+      removed: true
+    });
+    expect(await hp.add('wrld_missing')).toEqual({ status: 'notFound' });
   });
 
   test('roles seed and token round-trip with RETURNING id', async () => {
