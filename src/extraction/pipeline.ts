@@ -176,228 +176,35 @@ export const parseWorldInfoFromPlainText = async (
  * Filter worlds by world name using Levenshtein distance
  * @param data - Array of limited world data to search through
  * @param worldName - The world name to match against
- * @returns Array of worlds filtered by world name similarity, or empty array if error occurs
+ * @returns Worlds scoring at or above 0.5 similarity, best first
  */
 export const filterWorldsWithWorldName = (
   data: LimitedWorld[],
   worldName: string
 ): LimitedWorld[] => {
-  try {
-    // Input validation
-    if (!data || !Array.isArray(data)) {
-      logger.warn(
-        'filterWorldsWithWorldName: Invalid data parameter - not an array'
-      );
-      return [];
-    }
+  const threshold = 0.5;
 
-    if (!worldName || typeof worldName !== 'string') {
-      logger.warn(
-        'filterWorldsWithWorldName: Invalid worldName parameter - not a string'
-      );
-      return [];
-    }
-
-    if (data.length === 0) {
-      logger.info('filterWorldsWithWorldName: Empty data array provided');
-      return [];
-    }
-
-    // Check if data has the expected structure
-    if (
-      !data.every((item) => item && typeof item === 'object' && 'name' in item)
-    ) {
-      logger.warn(
-        'filterWorldsWithWorldName: Data array contains invalid items - missing name property'
-      );
-      return [];
-    }
-
-    // Extract world names safely
-    const worldNames = data
-      .map((x) => {
-        if (x && x.name && typeof x.name === 'string') {
-          return x.name;
-        }
-        logger.warn(
-          'filterWorldsWithWorldName: Invalid name found in data item:',
-          x
-        );
-        return '';
-      })
-      .filter((name) => name !== ''); // Remove empty names
-
-    if (worldNames.length === 0) {
-      logger.warn(
-        'filterWorldsWithWorldName: No valid world names found in data'
-      );
-      return [];
-    }
-
-    // Calculate similarity scores for all worlds
-    const worldScores = data.map((world) => {
-      if (world && world.name && typeof world.name === 'string') {
-        try {
-          const levenshteinDistance = distance(worldName, world.name);
-          const maxLength = Math.max(worldName.length, world.name.length);
-          const similarity = 1 - levenshteinDistance / maxLength;
-          return { world, score: similarity };
-        } catch (levenshteinError) {
-          logger.error(
-            'filterWorldsWithWorldName: Error in Levenshtein comparison:',
-            levenshteinError
-          );
-          return { world, score: 0 };
-        }
-      }
-      return { world, score: 0 };
-    });
-
-    // Filter worlds with similarity score above threshold (0.5 = 50% similarity)
-    const threshold = 0.5;
-    const filteredWorlds = worldScores
-      .filter(({ score }) => score >= threshold)
-      .sort((a, b) => b.score - a.score) // Sort by similarity score (highest first)
-      .map(({ world }) => world);
-
-    logger.info(
-      `filterWorldsWithWorldName: Filtered ${data.length} worlds to ${filteredWorlds.length} by world name similarity (threshold: ${threshold})`
-    );
-
-    return filteredWorlds;
-  } catch (error) {
-    // Catch any unexpected errors
-    logger.error(
-      'filterWorldsWithWorldName: Unexpected error occurred:',
-      error
-    );
-    return [];
-  }
+  return data
+    .map((world) => {
+      const levenshteinDistance = distance(worldName, world.name);
+      const maxLength = Math.max(worldName.length, world.name.length);
+      return { world, score: 1 - levenshteinDistance / maxLength };
+    })
+    .filter(({ score }) => score >= threshold)
+    .sort((a, b) => b.score - a.score)
+    .map(({ world }) => world);
 };
 
 /**
  * Retrieve a world from an array by comparing the author names
  * @param data - Array of limited world data to search through
  * @param authorName - The author name to match against
- * @returns The world with the closest matching author name, or undefined if error occurs
+ * @returns The world with the closest matching author name, or undefined when nothing is comparable
  */
 export const filterWorldsWithAuthorName = (
   data: LimitedWorld[],
   authorName: string
 ): LimitedWorld | undefined => {
-  try {
-    // Input validation
-    if (!data || !Array.isArray(data)) {
-      logger.warn(
-        'filterWorldsWithAuthorName: Invalid data parameter - not an array'
-      );
-      return undefined;
-    }
-
-    if (!authorName || typeof authorName !== 'string') {
-      logger.warn(
-        'filterWorldsWithAuthorName: Invalid authorName parameter - not a string'
-      );
-      return undefined;
-    }
-
-    if (data.length === 0) {
-      logger.info('filterWorldsWithAuthorName: Empty data array provided');
-      return undefined;
-    }
-
-    // Check if data has the expected structure
-    if (
-      !data.every(
-        (item) => item && typeof item === 'object' && 'authorName' in item
-      )
-    ) {
-      logger.warn(
-        'filterWorldsWithAuthorName: Data array contains invalid items - missing authorName property'
-      );
-      return undefined;
-    }
-
-    // Extract author names safely
-    const authorNames = data
-      .map((x) => {
-        if (x && x.authorName && typeof x.authorName === 'string') {
-          return x.authorName;
-        }
-        logger.warn(
-          'filterWorldsWithAuthorName: Invalid authorName found in data item:',
-          x
-        );
-        return '';
-      })
-      .filter((name) => name !== ''); // Remove empty names
-
-    if (authorNames.length === 0) {
-      logger.warn(
-        'filterWorldsWithAuthorName: No valid author names found in data'
-      );
-      return undefined;
-    }
-
-    // Find closest author name using Levenshtein distance
-    let closestName: string;
-    try {
-      closestName = closest(authorName, authorNames);
-    } catch (levenshteinError) {
-      logger.error(
-        'filterWorldsWithAuthorName: Error in Levenshtein comparison:',
-        levenshteinError
-      );
-      // Fallback: return first item if Levenshtein fails
-      return data[0];
-    }
-
-    if (!closestName) {
-      logger.warn(
-        'filterWorldsWithAuthorName: Levenshtein comparison returned no result'
-      );
-      return data[0]; // Fallback to first item
-    }
-
-    // Find the index of the closest name
-    const indexOfClosestName = authorNames.indexOf(closestName);
-
-    if (indexOfClosestName === -1) {
-      logger.warn(
-        'filterWorldsWithAuthorName: Could not find closest name in authorNames array'
-      );
-      return data[0]; // Fallback to first item
-    }
-
-    // Return the world data for the closest matching author
-    const result = data[indexOfClosestName];
-
-    if (!result) {
-      logger.warn(
-        'filterWorldsWithAuthorName: No result found at calculated index'
-      );
-      return data[0]; // Fallback to first item
-    }
-
-    logger.info(
-      `filterWorldsWithAuthorName: Successfully matched author "${authorName}" to "${closestName}"`
-    );
-    return result;
-  } catch (error) {
-    // Catch any unexpected errors
-    logger.error(
-      'filterWorldsWithAuthorName: Unexpected error occurred:',
-      error
-    );
-
-    // Return first item as fallback if available, otherwise undefined
-    if (data && Array.isArray(data) && data.length > 0) {
-      logger.info(
-        'filterWorldsWithAuthorName: Returning first item as fallback due to error'
-      );
-      return data[0];
-    }
-
-    return undefined;
-  }
+  const authorNames = data.map((world) => world.authorName);
+  return data[authorNames.indexOf(closest(authorName, authorNames))];
 };
