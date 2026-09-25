@@ -25,6 +25,28 @@ export interface WorldRecord {
   internalAddDate?: number | null;
 }
 
+export interface WorldFilters {
+  tags?: string[];
+  excludeFlags?: string[];
+  flagMode?: 'include' | 'exclude';
+  platforms?: string[];
+  guildId?: string;
+  quality?: ('good' | 'bad')[];
+  qualityMode?: 'exclude';
+  search?: string;
+  minCapacity?: number;
+  maxCapacity?: number;
+  worldIds?: string[];
+  dayRange?: number;
+  highPriorityOnly?: boolean;
+  sortOrder?: 'asc' | 'desc';
+}
+
+const JUNCTIONS = {
+  tags: { relation: 'world_tags', column: 'tag', orderBy: 'j.added_at, j.id' },
+  flags: { relation: 'world_flags', column: 'flag', orderBy: 'j.flag' }
+} as const;
+
 interface WorldRow extends Record<string, unknown> {
   world_id: string;
   guild_id: string;
@@ -202,77 +224,44 @@ export class WorldRepository {
     if (!record) {
       return undefined;
     }
-    return (await this.attachFlags(await this.attachTags([record])))[0];
+    const tagged = await this.attachJunction('tags', [record]);
+    return (await this.attachJunction('flags', tagged))[0];
   }
 
   /**
-   * Attach each record's tags from the world_tags junction, ordered by tag.
-   * Runs one batched query per distinct world_id instead of a per-row
-   * correlated subquery, so it works on both pg-mem and real Postgres.
+   * Attach each record's values from a junction table. Tags order by
+   * (added_at, id), flags by flag. Runs one batched query per distinct
+   * world_id instead of a per-row correlated subquery, so it works on both
+   * pg-mem and real Postgres.
    */
-  private async attachTags(records: WorldRecord[]): Promise<WorldRecord[]> {
+  private async attachJunction(
+    field: 'tags' | 'flags',
+    records: WorldRecord[]
+  ): Promise<WorldRecord[]> {
     if (records.length === 0) {
       return records;
     }
+    const { relation, column, orderBy } = JUNCTIONS[field];
     const worldIds = [...new Set(records.map((r) => r.worldId))];
     const placeholders = worldIds.map((_, i) => `$${i + 1}`).join(', ');
-    const result = await this.db.query<{
-      world_id: string;
-      tag: string;
-    }>(
-      `SELECT wt.world_id, wt.tag
-       FROM world_tags wt
-       WHERE wt.world_id IN (${placeholders})
-       ORDER BY wt.world_id, wt.added_at, wt.id`,
+    const result = await this.db.query<{ world_id: string; value: string }>(
+      `SELECT j.world_id, j.${column} AS value
+       FROM ${relation} j
+       WHERE j.world_id IN (${placeholders})
+       ORDER BY j.world_id, ${orderBy}`,
       worldIds
     );
     const byKey = new Map<string, string[]>();
     for (const row of result.rows) {
       const arr = byKey.get(row.world_id);
       if (arr) {
-        arr.push(row.tag);
+        arr.push(row.value);
       } else {
-        byKey.set(row.world_id, [row.tag]);
+        byKey.set(row.world_id, [row.value]);
       }
     }
     for (const record of records) {
-      record.tags = byKey.get(record.worldId) ?? [];
-    }
-    return records;
-  }
-
-  /**
-   * Attach each record's flags from the world_flags junction, ordered by flag.
-   * Runs one batched query per distinct world_id instead of a per-row
-   * correlated subquery, so it works on both pg-mem and real Postgres.
-   */
-  private async attachFlags(records: WorldRecord[]): Promise<WorldRecord[]> {
-    if (records.length === 0) {
-      return records;
-    }
-    const worldIds = [...new Set(records.map((r) => r.worldId))];
-    const placeholders = worldIds.map((_, i) => `$${i + 1}`).join(', ');
-    const result = await this.db.query<{
-      world_id: string;
-      flag: string;
-    }>(
-      `SELECT wf.world_id, wf.flag
-       FROM world_flags wf
-       WHERE wf.world_id IN (${placeholders})
-       ORDER BY wf.world_id, wf.flag`,
-      worldIds
-    );
-    const byKey = new Map<string, string[]>();
-    for (const row of result.rows) {
-      const arr = byKey.get(row.world_id);
-      if (arr) {
-        arr.push(row.flag);
-      } else {
-        byKey.set(row.world_id, [row.flag]);
-      }
-    }
-    for (const record of records) {
-      record.flags = byKey.get(record.worldId) ?? [];
+      record[field] = byKey.get(record.worldId) ?? [];
     }
     return records;
   }
@@ -447,21 +436,10 @@ export class WorldRepository {
     return result.rows.map((r) => r.world_id);
   }
 
-  private buildWhereClause(filters?: {
-    tags?: string[];
-    excludeFlags?: string[];
-    flagMode?: 'include' | 'exclude';
-    platforms?: string[];
-    guildId?: string;
-    quality?: ('good' | 'bad')[];
-    qualityMode?: 'exclude';
-    search?: string;
-    minCapacity?: number;
-    maxCapacity?: number;
-    worldIds?: string[];
-    dayRange?: number;
-    highPriorityOnly?: boolean;
-  }): { whereClause: string; params: (string | number | string[])[] } {
+  private buildWhereClause(filters?: WorldFilters): {
+    whereClause: string;
+    params: (string | number | string[])[];
+  } {
     const whereParts: string[] = [];
     const params: (string | number | string[])[] = [];
 
@@ -507,26 +485,24 @@ export class WorldRepository {
     }
 
     if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
-      if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
-        const uniqueFlags = [...new Set(filters.excludeFlags)];
-        const start = params.length;
-        const placeholders = uniqueFlags
-          .map((_, i) => `$${start + i + 1}`)
-          .join(', ');
-        params.push(...uniqueFlags);
-        if (filters.flagMode === 'include') {
-          params.push(uniqueFlags.length);
-          // worlds whose flag rows cover every selected flag. COUNT(*) works
-          // because (world_id, flag) is the world_flags primary key, so
-          // duplicates cannot inflate the count.
-          whereParts.push(
-            `wr.world_id IN (SELECT s.world_id FROM (SELECT wf.world_id, COUNT(*) c FROM world_flags wf WHERE wf.flag IN (${placeholders}) GROUP BY wf.world_id) s WHERE s.c = $${start + uniqueFlags.length + 1})`
-          );
-        } else {
-          whereParts.push(
-            `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag IN (${placeholders}))`
-          );
-        }
+      const uniqueFlags = [...new Set(filters.excludeFlags)];
+      const start = params.length;
+      const placeholders = uniqueFlags
+        .map((_, i) => `$${start + i + 1}`)
+        .join(', ');
+      params.push(...uniqueFlags);
+      if (filters.flagMode === 'include') {
+        params.push(uniqueFlags.length);
+        // worlds whose flag rows cover every selected flag. COUNT(*) works
+        // because (world_id, flag) is the world_flags primary key, so
+        // duplicates cannot inflate the count.
+        whereParts.push(
+          `wr.world_id IN (SELECT s.world_id FROM (SELECT wf.world_id, COUNT(*) c FROM world_flags wf WHERE wf.flag IN (${placeholders}) GROUP BY wf.world_id) s WHERE s.c = $${start + uniqueFlags.length + 1})`
+        );
+      } else {
+        whereParts.push(
+          `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag IN (${placeholders}))`
+        );
       }
     }
 
@@ -593,22 +569,7 @@ export class WorldRepository {
   async getAllPaginated(
     limit: number,
     offset: number,
-    filters?: {
-      tags?: string[];
-      excludeFlags?: string[];
-      flagMode?: 'include' | 'exclude';
-      platforms?: string[];
-      guildId?: string;
-      quality?: ('good' | 'bad')[];
-      qualityMode?: 'exclude';
-      search?: string;
-      minCapacity?: number;
-      maxCapacity?: number;
-      worldIds?: string[];
-      dayRange?: number;
-      highPriorityOnly?: boolean;
-      sortOrder?: 'asc' | 'desc';
-    }
+    filters?: WorldFilters
   ): Promise<{ rows: WorldRecord[]; total: number }> {
     const { whereClause, params } = this.buildWhereClause(filters);
     const orderDirection = filters?.sortOrder === 'asc' ? 'ASC' : 'DESC';
@@ -632,8 +593,9 @@ export class WorldRepository {
     const total = countResult.rows[0]?.total ?? 0;
 
     return {
-      rows: await this.attachFlags(
-        await this.attachTags(selectResult.rows.map(rowToRecord))
+      rows: await this.attachJunction(
+        'flags',
+        await this.attachJunction('tags', selectResult.rows.map(rowToRecord))
       ),
       total
     };
@@ -736,7 +698,9 @@ export class WorldRepository {
       `SELECT * FROM world_records ORDER BY created_at DESC LIMIT 1`
     );
     const record = result.rows[0] ? rowToRecord(result.rows[0]) : undefined;
-    return record ? (await this.attachTags([record]))[0] : undefined;
+    return record
+      ? (await this.attachJunction('tags', [record]))[0]
+      : undefined;
   }
 }
 
