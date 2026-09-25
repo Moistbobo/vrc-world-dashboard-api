@@ -41,13 +41,18 @@ describe('high priority worlds', () => {
   test('add inserts a row and reports added: true', async () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
-    expect(await repo.add('wrld_abc')).toEqual({ added: true });
+    expect(await repo.add('wrld_abc')).toEqual({ status: 'ok', added: true });
+  });
+
+  test('add reports notFound for a missing world', async () => {
+    const repo = new HighPriorityRepository(queryable);
+    expect(await repo.add('wrld_missing')).toEqual({ status: 'notFound' });
   });
 
   test('add is idempotent', async () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
-    expect(await repo.add('wrld_abc')).toEqual({ added: true });
+    expect(await repo.add('wrld_abc')).toEqual({ status: 'ok', added: true });
 
     // pg-mem reports rowCount 1 even when ON CONFLICT DO NOTHING skips a
     // duplicate (Postgres reports 0), so replay the duplicate insert as a
@@ -57,7 +62,7 @@ describe('high priority worlds', () => {
         ? []
         : null
     );
-    expect(await repo.add('wrld_abc')).toEqual({ added: false });
+    expect(await repo.add('wrld_abc')).toEqual({ status: 'ok', added: false });
     guard.unsubscribe();
   });
 
@@ -65,13 +70,22 @@ describe('high priority worlds', () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
     await repo.add('wrld_abc');
-    expect(await repo.remove('wrld_abc')).toEqual({ removed: true });
+    expect(await repo.remove('wrld_abc')).toEqual({
+      status: 'ok',
+      removed: true
+    });
+  });
+
+  test('remove reports notFound for a missing world', async () => {
+    const repo = new HighPriorityRepository(queryable);
+    expect(await repo.remove('wrld_missing')).toEqual({ status: 'notFound' });
   });
 
   test('remove is idempotent', async () => {
     await addWorld('wrld_abc', 'guild-1');
     const repo = new HighPriorityRepository(queryable);
     expect(await repo.remove('wrld_abc')).toEqual({
+      status: 'ok',
       removed: false
     });
   });
