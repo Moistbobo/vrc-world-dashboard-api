@@ -47,7 +47,7 @@ router.post(
 router.post(
   '/api/worlds',
   requirePermission('worlds:write'),
-  async (request, response) => {
+  async (request: TokenRequest, response) => {
     const body = parseAddWorldBody(request.body);
     if (!body) {
       return response.status(400).send({
@@ -56,7 +56,10 @@ router.post(
     }
 
     try {
-      const result = await addWorld(body);
+      const result = await addWorld({
+        ...body,
+        addedByTokenId: request.token?.id
+      });
       if (result.status === 'duplicate') {
         return response.status(200).send({
           duplicate: true,

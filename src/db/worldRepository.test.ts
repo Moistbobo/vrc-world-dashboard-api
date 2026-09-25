@@ -1,7 +1,9 @@
 import { runMigrations } from './schema';
 import { createTestDb, type TestDb } from './testUtils';
-import { WorldRepository } from './worldRepository';
+import { WorldRepository, type WorldRecord } from './worldRepository';
 import { FlagRepository } from './flagRepository';
+import { RoleRepository } from './roleRepository';
+import { TokenRepository } from './tokenRepository';
 
 describe('world records', () => {
   let queryable: TestDb['queryable'];
@@ -39,6 +41,78 @@ describe('world records', () => {
       createdAt: 1717257600
     });
   }
+
+  describe('upsert added_by_token_id', () => {
+    function record(worldId: string, tags: string[]): WorldRecord {
+      return {
+        worldId,
+        guildId: 'guild-1',
+        messageId: '1250000000000000000',
+        name: 'Test World',
+        authorName: 'Test Author',
+        capacity: 16,
+        platforms: ['standalonewindows'],
+        tags,
+        imageUrl: null,
+        sourceContent: null,
+        vrchatData: null,
+        packageSizes: [],
+        createdAt: 1717257600
+      };
+    }
+
+    async function seedToken(name: string): Promise<number> {
+      const roles = new RoleRepository(queryable);
+      const viewer = (await roles.findByName('viewer'))!;
+      const { record: token } = await new TokenRepository(queryable).create(
+        name,
+        viewer
+      );
+      return token.id;
+    }
+
+    test('records the token id on every tag row', async () => {
+      const tokenId = await seedToken('upsert-token');
+      await new WorldRepository(queryable).upsert(
+        record('wrld_auth', ['horror', 'game']),
+        tokenId
+      );
+
+      const rows = await queryable.query<{
+        tag: string;
+        added_by_token_id: number;
+      }>(
+        `SELECT tag, added_by_token_id FROM world_tags
+         WHERE world_id = $1 ORDER BY tag`,
+        ['wrld_auth']
+      );
+      expect(rows.rows).toEqual([
+        { tag: 'game', added_by_token_id: tokenId },
+        { tag: 'horror', added_by_token_id: tokenId }
+      ]);
+    });
+
+    test('re-stamps tag rows with the second token on re-upsert', async () => {
+      const firstTokenId = await seedToken('upsert-token-1');
+      const secondTokenId = await seedToken('upsert-token-2');
+      const repo = new WorldRepository(queryable);
+      await repo.upsert(record('wrld_auth', ['horror']), firstTokenId);
+      await repo.upsert(record('wrld_auth', ['kino', 'game']), secondTokenId);
+
+      const rows = await queryable.query<{
+        tag: string;
+        added_by_token_id: number;
+      }>(
+        `SELECT tag, added_by_token_id FROM world_tags
+         WHERE world_id = $1 ORDER BY tag`,
+        ['wrld_auth']
+      );
+      expect(rows.rows).toEqual([
+        { tag: 'game', added_by_token_id: secondTokenId },
+        { tag: 'kino', added_by_token_id: secondTokenId }
+      ]);
+    });
+  });
 
   describe('updateQuality', () => {
     test('sets quality to good', async () => {
