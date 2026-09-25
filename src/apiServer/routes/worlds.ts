@@ -13,8 +13,21 @@ router.get(
   async (request: TokenRequest, response) => {
     const query = request.query as Record<string, unknown>;
 
-    const limit = Math.min(Number(query.limit ?? 50), 500);
-    const offset = Number(query.offset ?? 0);
+    let limit: number;
+    let offset: number;
+    try {
+      limit =
+        parseIntegerParam(query.limit, { name: 'limit', min: 1, max: 999 }) ??
+        50;
+      offset = parseIntegerParam(query.offset, { name: 'offset', min: 0 }) ?? 0;
+    } catch (error) {
+      return response.status(400).send({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Invalid pagination parameters'
+      });
+    }
 
     const dayRange =
       typeof query.dayRange === 'string'
