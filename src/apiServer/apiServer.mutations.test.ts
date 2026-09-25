@@ -681,6 +681,23 @@ describe('API mutations', () => {
       expect(response.body).toEqual({ error: 'Invalid tags: nope' });
     });
 
+    it('returns 400 for invalid tags even when the world is missing', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(validateTags).mockReturnValue({ valid: [], invalid: ['nope'] });
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({
+          updateTagsOnly: vi.fn(() => ({ status: 'notFound' }))
+        })
+      );
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/tags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', tags: ['nope'] });
+
+      expect(response.status).toBe(400);
+    });
+
     it('returns 200 with updated: true and passes canonical tags to the repo', async () => {
       mockTokenRepo(tagsWritePermissions);
       asMock(validateTags).mockReturnValue({
@@ -824,6 +841,21 @@ describe('API mutations', () => {
       expect(response.body).toEqual({
         error: 'Invalid flags: nope, also-nope'
       });
+    });
+
+    it('returns 400 for invalid flags even when the world is missing', async () => {
+      mockTokenRepo(tagsWritePermissions);
+      asMock(validateFlags).mockReturnValue({ valid: [], invalid: ['nope'] });
+      asMock(getFlagRepository).mockReturnValue({
+        replaceWorldFlags: vi.fn(() => ({ status: 'notFound' }))
+      } as never);
+
+      const response = await request(app)
+        .put(`/api/worlds/${VALID_BODY.worldId}/flags/edit`)
+        .set(AUTH)
+        .send({ guildId: 'guild-1', flags: ['nope'] });
+
+      expect(response.status).toBe(400);
     });
 
     it('returns 200 with updated: true and passes canonical flags to the repo', async () => {
