@@ -3,30 +3,28 @@
   - Keep the sections below filled in; do not delete them.
   - Remove any checklist items or subsection comments that are genuinely not applicable, but state why in the PR description.
   - Non-API PRs (e.g. dependency bumps, config changes, refactors with no endpoint/behavior impact) may skip request/response evidence, but must still explain why in the API Verification section.
-  - Link the governing issue in the Linked issue section with a closing keyword. Do not leave it blank.
+  - Lead the description with the CLOSES line and its issue URL. Do not leave it blank.
   - For PRs targeting `release`, use the release template instead:
     `.github/PULL_REQUEST_TEMPLATE/release.md`
+-->
+
+CLOSES: <issue-url>
+
+<!--
+  Put the issue URL after `CLOSES:`, for example:
+
+    CLOSES: https://github.com/Moistbobo/vrc-world-dashboard-api/issues/123
+
+  GitHub reads the URL as a closing reference, so the issue timeline links this
+  PR and the issue closes on merge. Keep the line at the top of the description.
+  For a stacked PR whose base is another PR, the closing reference registers once
+  the base reaches the default branch; the URL still cross-references the issue
+  immediately. When this PR resolves no issue, write `CLOSES: N/A` and say why.
 -->
 
 ## Summary
 
 -
-
-## Linked issue
-
-<!--
-  Use a GitHub closing keyword so the issue timeline links this PR and the issue
-  closes on merge, for example:
-
-    Closes #123
-
-  Accepted keywords include Closes, Fixes, and Resolves. For a stacked PR whose
-  base is another PR, the closing reference registers once the base reaches the
-  default branch; a plain mention such as `Part of #123` links the issue immediately.
-  When this PR resolves no issue, write "No linked issue" and say why.
--->
-
-Closes #
 
 ## Risk Rating
 
