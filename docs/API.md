@@ -928,6 +928,35 @@ GET /api/worlds?where=eyJncm91cHMiOlt7ImNvbm5lY3RvciI6Im9yIiwiY29uZGl0aW9ucyI6W3
 | ------ | --------------------------------- | -------------------------------------------------------------------------------- |
 | `400`  | `{ "error": "<message>" }`        | Malformed tree, unknown field or operator, out-of-range value, or bad pagination. |
 | `403`  | `{ "error": "Forbidden" }`        | Token lacks `worlds:query`.                                                       |
+| `429`  | `{ "error": "Too many requests" }`| Token exceeded its query rate limit. Response carries a `Retry-After` header.     |
+
+**Rate limiting**
+
+`POST /api/worlds/query` is rate limited per token with a fixed window. The
+limiter keys on the token id, so one token cannot exhaust another token's
+budget. A denied request returns `429` with a `Retry-After` header holding the
+whole seconds until the window resets, and runs no SQL. Only this endpoint is
+rate limited; `GET /api/worlds` and the mutation routes are unaffected.
+
+| Env var                      | Default | Description                                                        |
+| ---------------------------- | ------- | ------------------------------------------------------------------ |
+| `WORLDS_QUERY_RATE_LIMIT`    | `120`   | Requests allowed per token per window. `0` or negative disables the limiter. |
+| `WORLDS_QUERY_RATE_WINDOW_MS`| `60000` | Fixed window length in milliseconds.                               |
+
+**Audit log**
+
+Every accepted query emits one structured log entry at `info` with the message
+`worlds query executed` and these fields. The query values, world names, and
+source text are never logged.
+
+| Field         | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `event`       | Always `worlds_query`.                                    |
+| `role`        | Name of the token's role.                                 |
+| `groups`      | Number of groups in the query tree.                       |
+| `conditions`  | Total conditions across all groups.                       |
+| `duration_ms` | Handler duration in milliseconds.                         |
+| `total`       | Total rows the query matched.                             |
 
 ---
 
