@@ -408,9 +408,9 @@ submitting guild.
 ```
 
 The `world` object is the full stored record, including the internal fields
-`messageId`, `sourceContent`, `vrchatData`, and `guildId`. The creator uses
-these fields to validate the submission. This response is the one exception to
-the stripping rule below.
+`messageId`, `sourceContent`, and `vrchatData`. This response is the one
+exception to the stripping rule below, so the submitting bot client receives
+these fields even though other responses omit them.
 
 **Duplicate** — status `200`:
 
@@ -422,7 +422,7 @@ the stripping rule below.
 }
 ```
 
-The `200` response is asymmetric with `201`. It returns the sanitized existing
+The `200` response is asymmetric to `201`. It returns the sanitized existing
 world object, not the full record, plus `existingMessageId` so the bot can link
 to the original message.
 
