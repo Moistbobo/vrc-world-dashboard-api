@@ -194,6 +194,10 @@ describe('API mutations', () => {
         .send(VALID_BODY);
 
       expect(response.status).toBe(201);
+      expect(addWorld).toHaveBeenCalledWith({
+        ...VALID_BODY,
+        addedByTokenId: 1
+      });
       const body = response.body;
       expect(body.duplicate).toBe(false);
       expect(body.world.worldId).toBe(VALID_BODY.worldId);
@@ -235,6 +239,10 @@ describe('API mutations', () => {
         .send(VALID_BODY);
 
       expect(response.status).toBe(200);
+      expect(addWorld).toHaveBeenCalledWith({
+        ...VALID_BODY,
+        addedByTokenId: 1
+      });
       const body = response.body;
       expect(body.duplicate).toBe(true);
       expect(body.existingMessageId).toBe('1240000000000000000');
