@@ -19,6 +19,11 @@ async function runMigrationsBefore(
     applied_at bigint NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()))::bigint
   )`);
   const stopIndex = MIGRATIONS.findIndex((m) => m.name === stopBefore);
+  if (stopIndex === -1) {
+    throw new Error(
+      `runMigrationsBefore: no migration named "${stopBefore}" (renamed?)`
+    );
+  }
   for (const migration of MIGRATIONS.slice(0, stopIndex)) {
     await queryable.withTransaction(async (tx) => {
       await migration.run(tx);
