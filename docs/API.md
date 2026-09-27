@@ -398,9 +398,19 @@ submitting guild.
 ```json
 {
   "duplicate": false,
-  "world": { "...": "sanitized world object (same shape as GET responses)" }
+  "world": {
+    "...": "full stored world record, not sanitized",
+    "messageId": "1250000000000000000",
+    "sourceContent": "https://vrchat.com/home/world/wrld_abc123 Tags: horror, game",
+    "vrchatData": "{ ... raw VRChat API payload ... }"
+  }
 }
 ```
+
+The `world` object is the full stored record, including the internal fields
+`messageId`, `sourceContent`, `vrchatData`, and `guildId`. The creator uses
+these fields to validate the submission. This response is the one exception to
+the stripping rule below.
 
 **Duplicate** — status `200`:
 
@@ -411,6 +421,10 @@ submitting guild.
   "world": { "...": "sanitized existing world object" }
 }
 ```
+
+The `200` response is asymmetric with `201`. It returns the sanitized existing
+world object, not the full record, plus `existingMessageId` so the bot can link
+to the original message.
 
 The bot replies to the new message with a link to the original message built
 from `existingMessageId` and the channel.
@@ -839,7 +853,8 @@ Each world object returned by the API has the following fields:
 | `internalAddDate` | string \| null              | ISO 8601 timestamp of when the world was originally tagged, if known.                                         |
 
 Internal fields such as `messageId`, `sourceContent`, and `vrchatData` are
-intentionally stripped from API responses.
+intentionally stripped from GET, list, and detail responses. `POST /api/worlds`
+is the exception: its `201` create response returns the full stored record.
 
 ---
 
