@@ -18,6 +18,10 @@ import { runMigrations } from '../db/schema';
  * role NAME against the Postgres roles table.
  */
 
+// Authoritative historical migration names, mirroring what production
+// _migrations may already hold. 003/004/005/007 are reserved: their work was
+// folded into 001_create_world_records in src/db/schema.ts, but the names stay
+// listed so an existing database is recorded as fully migrated.
 const MIGRATION_NAMES = [
   '001_create_world_records',
   '002_create_deleted_world_records',

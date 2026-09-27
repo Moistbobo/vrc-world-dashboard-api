@@ -10,15 +10,16 @@ function noopMigrationsTableGuard(db: TestDb['db']) {
   );
 }
 
-async function runMigrationsThrough(
+async function runMigrationsBefore(
   queryable: Queryable,
-  count: number
+  stopBefore: string
 ): Promise<void> {
   await queryable.query(`CREATE TABLE IF NOT EXISTS _migrations (
     name text PRIMARY KEY,
     applied_at bigint NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()))::bigint
   )`);
-  for (const migration of MIGRATIONS.slice(0, count)) {
+  const stopIndex = MIGRATIONS.findIndex((m) => m.name === stopBefore);
+  for (const migration of MIGRATIONS.slice(0, stopIndex)) {
     await queryable.withTransaction(async (tx) => {
       await migration.run(tx);
       await tx.query(`INSERT INTO _migrations (name) VALUES ($1)`, [
@@ -64,7 +65,7 @@ describe('migration 013_world_records_world_id_key', () => {
 
   test('dedupes multi-guild rows keeping greatest updated_at, ties by greatest id', async () => {
     const { queryable, db } = createTestDb();
-    await runMigrationsThrough(queryable, 12);
+    await runMigrationsBefore(queryable, '013_world_records_world_id_key');
 
     await queryable.query(`
       INSERT INTO world_records (world_id, guild_id, message_id, name, quality, updated_at) VALUES
