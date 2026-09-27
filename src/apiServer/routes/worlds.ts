@@ -1,5 +1,8 @@
 import { Router } from 'express';
-import { getWorldRepository } from '../../db/worldRepository';
+import {
+  getWorldRepository,
+  type WorldFilters
+} from '../../db/worldRepository';
 import { searchWorldsByName } from '../../vrchat/client';
 import { parseIntegerParam, parseStringListQuery } from '../utils/queryParams';
 import { sanitizeRecord } from '../utils/sanitize';
@@ -90,21 +93,7 @@ router.get(
       });
     }
 
-    const filters: {
-      platforms?: string[];
-      tags?: string[];
-      excludeFlags?: string[];
-      flagMode?: 'include' | 'exclude';
-      quality?: ('good' | 'bad')[];
-      qualityMode?: 'exclude';
-      search?: string;
-      minCapacity?: number;
-      maxCapacity?: number;
-      worldIds?: string[];
-      dayRange?: number;
-      highPriorityOnly?: boolean;
-      sortOrder?: 'asc' | 'desc';
-    } = {};
+    const filters: WorldFilters = {};
     if (tags) filters.tags = tags;
     if (excludeFlags) filters.excludeFlags = excludeFlags;
     if (query.flagMode === 'include') filters.flagMode = 'include';
