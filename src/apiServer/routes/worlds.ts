@@ -7,6 +7,14 @@ import { searchWorldsByName } from '../../vrchat/client';
 import { parseIntegerParam, parseStringListQuery } from '../utils/queryParams';
 import { sanitizeRecord } from '../utils/sanitize';
 import { requirePermission, type TokenRequest } from '../middleware/auth';
+import {
+  decodeWorldsQueryParam,
+  isSortField,
+  parseWorldsQuery,
+  WorldsQueryError,
+  type SortField,
+  type WorldsQuery
+} from '../../worlds/query';
 
 const router = Router();
 
@@ -111,10 +119,123 @@ router.get(
       typeof query.search === 'string' ? query.search.trim() : undefined;
     if (search) filters.search = search;
 
+    if (query.where !== undefined) {
+      if (typeof query.where !== 'string') {
+        return response.status(400).send({
+          error: 'where must be a single base64url string'
+        });
+      }
+      try {
+        filters.where = parseWorldsQuery(decodeWorldsQueryParam(query.where));
+      } catch (error) {
+        if (error instanceof WorldsQueryError) {
+          return response.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    }
+    if (isSortField(query.sortField)) {
+      filters.sortField = query.sortField;
+    }
+
     const { rows, total } = await getWorldRepository().getAllPaginated(
       limit,
       offset,
       Object.keys(filters).length > 0 ? filters : undefined
+    );
+
+    response.send({
+      total,
+      limit,
+      offset,
+      worlds: rows.map((row) =>
+        sanitizeRecord(row, {
+          includeHighPriority: canManage,
+          includeQuality: canManage
+        })
+      )
+    });
+  }
+);
+
+// POST /api/worlds/query — validated boolean query over world records
+router.post(
+  '/api/worlds/query',
+  requirePermission('worlds:query'),
+  async (request: TokenRequest, response) => {
+    const body = request.body as unknown;
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return response.status(400).send({ error: 'Body must be an object' });
+    }
+    const payload = body as Record<string, unknown>;
+
+    if (
+      typeof payload.query !== 'object' ||
+      payload.query === null ||
+      Array.isArray(payload.query)
+    ) {
+      return response.status(400).send({ error: 'query must be an object' });
+    }
+
+    let where: WorldsQuery;
+    try {
+      where = parseWorldsQuery(payload.query);
+    } catch (error) {
+      if (error instanceof WorldsQueryError) {
+        return response.status(400).send({ error: error.message });
+      }
+      throw error;
+    }
+
+    let limit: number;
+    let offset: number;
+    try {
+      limit = Math.min(
+        parseIntegerParam(payload.limit, { name: 'limit', min: 1 }) ?? 50,
+        500
+      );
+      offset =
+        parseIntegerParam(payload.offset, { name: 'offset', min: 0 }) ?? 0;
+    } catch (error) {
+      return response.status(400).send({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Invalid pagination parameters'
+      });
+    }
+
+    let sortField: SortField | undefined;
+    if (payload.sortField !== undefined) {
+      if (!isSortField(payload.sortField)) {
+        return response.status(400).send({
+          error: `Unknown sortField "${String(payload.sortField)}"`
+        });
+      }
+      sortField = payload.sortField;
+    }
+
+    let sortDir: 'asc' | 'desc' = 'desc';
+    if (payload.sortDir !== undefined) {
+      if (payload.sortDir !== 'asc' && payload.sortDir !== 'desc') {
+        return response
+          .status(400)
+          .send({ error: 'sortDir must be "asc" or "desc"' });
+      }
+      sortDir = payload.sortDir;
+    }
+
+    const canManage =
+      request.token?.role.permissions.includes('worlds:write') ?? false;
+
+    const { rows, total } = await getWorldRepository().getAllPaginated(
+      limit,
+      offset,
+      {
+        where,
+        sortField,
+        sortOrder: sortDir === 'asc' ? 'asc' : 'desc'
+      }
     );
 
     response.send({
