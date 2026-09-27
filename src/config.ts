@@ -2,6 +2,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function rateNumber(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 const Config = {
   VRC_USERNAME: process.env.VRC_USERNAME,
   VRC_PASSWORD: process.env.VRC_PASSWORD,
@@ -25,6 +31,11 @@ const Config = {
   API_ALLOWED_IPS: process.env.API_ALLOWED_IPS
     ? process.env.API_ALLOWED_IPS.split(',').map((ip) => ip.trim())
     : [],
+  WORLDS_QUERY_RATE_LIMIT: rateNumber(process.env.WORLDS_QUERY_RATE_LIMIT, 120),
+  WORLDS_QUERY_RATE_WINDOW_MS: rateNumber(
+    process.env.WORLDS_QUERY_RATE_WINDOW_MS,
+    60000
+  ),
   DEV: process.env.DEV === 'true',
   DISABLE_API_RESTRICTIONS:
     process.env.DISABLE_API_RESTRICTIONS === 'true' ||
