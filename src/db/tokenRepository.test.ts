@@ -11,15 +11,21 @@ describe('roles', () => {
     await runMigrations(queryable);
   });
 
-  test('seeds viewer, curator, admin roles', async () => {
+  test('seeds viewer, curator, admin, and bot roles', async () => {
     const repo = new RoleRepository(queryable);
     const roles = await repo.list();
     const names = roles.map((r) => r.name).sort();
-    expect(names).toEqual(['admin', 'curator', 'viewer']);
+    expect(names).toEqual(['admin', 'bot', 'curator', 'viewer']);
     expect(roles.find((r) => r.name === 'viewer')?.permissions).toEqual([
       'worlds:read',
       'tags:read',
       'meta:read'
+    ]);
+    expect(roles.find((r) => r.name === 'bot')?.permissions).toEqual([
+      'worlds:read',
+      'tags:read',
+      'meta:read',
+      'worlds:query'
     ]);
     expect(roles.find((r) => r.name === 'curator')?.permissions).toContain(
       'worlds:write'
