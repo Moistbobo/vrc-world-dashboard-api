@@ -157,7 +157,7 @@ describe('flagRepository', () => {
         ['furry', 'low quality'],
         record.id
       )
-    ).toBe(true);
+    ).toEqual({ status: 'ok', updated: true });
     expect(await repo.getByWorld('wrld_abc')).toEqual(['furry', 'low quality']);
 
     const tokenRows = await queryable.query<{ added_by_token_id: number }>(
@@ -166,25 +166,38 @@ describe('flagRepository', () => {
     );
     expect(tokenRows.rows.map((r) => r.added_by_token_id)).toEqual([record.id]);
 
-    expect(await repo.replaceWorldFlags('wrld_abc', ['AI slop'])).toBe(true);
+    expect(await repo.replaceWorldFlags('wrld_abc', ['AI slop'])).toEqual({
+      status: 'ok',
+      updated: true
+    });
     expect(await repo.getByWorld('wrld_abc')).toEqual(['AI slop']);
   });
 
-  it('replaceWorldFlags returns false when the set is unchanged', async () => {
+  it('replaceWorldFlags reports unchanged when the set is unchanged', async () => {
     await addWorld(queryable, 'wrld_abc');
     const repo = new FlagRepository(queryable);
     await repo.replaceWorldFlags('wrld_abc', ['furry', 'low quality']);
     expect(
       await repo.replaceWorldFlags('wrld_abc', ['low quality', 'furry'])
-    ).toBe(false);
+    ).toEqual({ status: 'ok', updated: false });
     expect(await repo.getByWorld('wrld_abc')).toEqual(['furry', 'low quality']);
+  });
+
+  it('replaceWorldFlags reports notFound for a missing world', async () => {
+    const repo = new FlagRepository(queryable);
+    expect(await repo.replaceWorldFlags('wrld_missing', ['furry'])).toEqual({
+      status: 'notFound'
+    });
   });
 
   it('replaceWorldFlags with an empty set clears the world flags', async () => {
     await addWorld(queryable, 'wrld_abc');
     const repo = new FlagRepository(queryable);
     await repo.replaceWorldFlags('wrld_abc', ['furry']);
-    expect(await repo.replaceWorldFlags('wrld_abc', [])).toBe(true);
+    expect(await repo.replaceWorldFlags('wrld_abc', [])).toEqual({
+      status: 'ok',
+      updated: true
+    });
     expect(await repo.getByWorld('wrld_abc')).toEqual([]);
   });
 

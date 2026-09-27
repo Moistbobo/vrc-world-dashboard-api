@@ -87,8 +87,8 @@ router.delete(
   async (request, response) => {
     const { worldId } = request.params as { worldId: string };
 
-    const deleted = await getWorldRepository().deleteByWorldId(worldId);
-    if (!deleted) {
+    const result = await getWorldRepository().deleteByWorldId(worldId);
+    if (result.status === 'notFound') {
       return response.status(404).send({ error: 'World not found' });
     }
     response.status(204).end();
@@ -109,13 +109,11 @@ router.put(
     }
 
     const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
+    const result = await repo.updateQuality(worldId, body.quality);
+    if (result.status === 'notFound') {
       return response.status(404).send({ error: 'World not found' });
     }
-
-    const updated = await repo.updateQuality(worldId, body.quality);
-    response.send({ updated });
+    response.send({ updated: result.updated });
   }
 );
 
@@ -133,19 +131,17 @@ router.put(
     }
 
     const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
-      return response.status(404).send({ error: 'World not found' });
-    }
-
     const tags = extractTags(body.tagSource ?? body.sourceContent ?? '');
-    const updated = await repo.updateTags(
+    const result = await repo.updateTags(
       worldId,
       tags,
       body.sourceContent,
       request.token?.id
     );
-    response.send({ updated, tags });
+    if (result.status === 'notFound') {
+      return response.status(404).send({ error: 'World not found' });
+    }
+    response.send({ updated: result.updated, tags });
   }
 );
 
@@ -162,12 +158,6 @@ router.put(
         .send({ error: 'Invalid body. Expected { tags }' });
     }
 
-    const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
-      return response.status(404).send({ error: 'World not found' });
-    }
-
     const { valid, invalid } = validateTags(body.tags);
     if (invalid.length > 0) {
       return response.status(400).send({
@@ -175,12 +165,12 @@ router.put(
       });
     }
 
-    const updated = await repo.updateTagsOnly(
-      worldId,
-      valid,
-      request.token?.id
-    );
-    response.send({ updated, tags: valid });
+    const repo = getWorldRepository();
+    const result = await repo.updateTagsOnly(worldId, valid, request.token?.id);
+    if (result.status === 'notFound') {
+      return response.status(404).send({ error: 'World not found' });
+    }
+    response.send({ updated: result.updated, tags: valid });
   }
 );
 
@@ -197,12 +187,6 @@ router.put(
         .send({ error: 'Invalid body. Expected { flags }' });
     }
 
-    const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
-      return response.status(404).send({ error: 'World not found' });
-    }
-
     const { valid, invalid } = validateFlags(body.flags);
     if (invalid.length > 0) {
       return response.status(400).send({
@@ -210,12 +194,15 @@ router.put(
       });
     }
 
-    const updated = await getFlagRepository().replaceWorldFlags(
+    const result = await getFlagRepository().replaceWorldFlags(
       worldId,
       valid,
       request.token?.id
     );
-    response.send({ updated, flags: valid });
+    if (result.status === 'notFound') {
+      return response.status(404).send({ error: 'World not found' });
+    }
+    response.send({ updated: result.updated, flags: valid });
   }
 );
 
@@ -226,17 +213,14 @@ router.put(
   async (request: TokenRequest, response) => {
     const { worldId } = request.params as { worldId: string };
 
-    const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
-      return response.status(404).send({ error: 'World not found' });
-    }
-
-    const { added } = await getHighPriorityRepository().add(
+    const result = await getHighPriorityRepository().add(
       worldId,
       request.token?.id
     );
-    response.send({ added });
+    if (result.status === 'notFound') {
+      return response.status(404).send({ error: 'World not found' });
+    }
+    response.send({ added: result.added });
   }
 );
 
@@ -247,14 +231,11 @@ router.delete(
   async (request, response) => {
     const { worldId } = request.params as { worldId: string };
 
-    const repo = getWorldRepository();
-    const exists = await repo.getByWorldId(worldId);
-    if (!exists) {
+    const result = await getHighPriorityRepository().remove(worldId);
+    if (result.status === 'notFound') {
       return response.status(404).send({ error: 'World not found' });
     }
-
-    const { removed } = await getHighPriorityRepository().remove(worldId);
-    response.send({ removed });
+    response.send({ removed: result.removed });
   }
 );
 
