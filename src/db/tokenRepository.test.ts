@@ -1,3 +1,4 @@
+import type { QueryResultRow } from 'pg';
 import { runMigrations } from './schema';
 import { createTestDb, type TestDb } from './testUtils';
 import { RoleRepository } from './roleRepository';
@@ -121,6 +122,28 @@ describe('api tokens', () => {
   test('findByHash returns undefined for an unknown hash', async () => {
     const repo = new TokenRepository(queryable);
     expect(await repo.findByHash('0'.repeat(64))).toBeUndefined();
+  });
+
+  test('findByHash resolves the token and its role in one query', async () => {
+    const repo = new TokenRepository(queryable);
+    const viewer = (await roles.findByName('viewer'))!;
+    const { rawToken } = await repo.create('bot', viewer);
+
+    let queries = 0;
+    const counting: TestDb['queryable'] = {
+      query: <R extends QueryResultRow>(text: string, values?: unknown[]) => {
+        queries += 1;
+        return queryable.query<R>(text, values);
+      },
+      withTransaction: (fn) => queryable.withTransaction(fn)
+    };
+
+    const found = await new TokenRepository(counting).findByHash(
+      hashToken(rawToken)
+    );
+    expect(queries).toBe(1);
+    expect(found?.role.permissions).toEqual(viewer.permissions);
+    expect(found?.role.name).toBe('viewer');
   });
 
   test('revoke is idempotent and marks the token', async () => {

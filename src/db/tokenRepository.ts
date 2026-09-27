@@ -3,6 +3,7 @@ import { getQueryable } from './pool';
 import { toNumber, toNumberOrNull } from './mappers';
 import { randomBytes, createHash } from 'crypto';
 import { RoleRepository, type RoleRecord } from './roleRepository';
+import { parsePermissions } from '../auth/permissions';
 import logger from '../logger';
 
 export interface ApiTokenRecord {
@@ -47,6 +48,21 @@ function rowToToken(row: TokenRow, role: RoleRecord): ApiTokenRecord {
   };
 }
 
+interface TokenWithRoleRow extends TokenRow {
+  role_name: string;
+  role_permissions: string[];
+  role_created_at: bigint | number;
+}
+
+function rowToTokenWithRole(row: TokenWithRoleRow): ApiTokenRecord {
+  return rowToToken(row, {
+    id: toNumber(row.role_id),
+    name: row.role_name,
+    permissions: parsePermissions(row.role_permissions),
+    createdAt: toNumber(row.role_created_at)
+  });
+}
+
 export class TokenRepository {
   private db: Queryable;
   private roles: RoleRepository;
@@ -81,15 +97,18 @@ export class TokenRepository {
   }
 
   async findByHash(tokenHash: string): Promise<ApiTokenRecord | undefined> {
-    const result = await this.db.query<TokenRow>(
-      `SELECT * FROM api_tokens WHERE token_hash = $1 LIMIT 1`,
+    const result = await this.db.query<TokenWithRoleRow>(
+      `SELECT t.id, t.token_hash, t.name, t.role_id, t.created_at, t.last_used_at, t.revoked_at,
+              r.name AS role_name, r.permissions AS role_permissions, r.created_at AS role_created_at
+       FROM api_tokens t
+       JOIN roles r ON r.id = t.role_id
+       WHERE t.token_hash = $1
+       LIMIT 1`,
       [tokenHash]
     );
     const row = result.rows[0];
     if (!row) return undefined;
-    const role = await this.roles.findById(toNumber(row.role_id));
-    if (!role) return undefined;
-    return rowToToken(row, role);
+    return rowToTokenWithRole(row);
   }
 
   async findByName(name: string): Promise<ApiTokenRecord | undefined> {
