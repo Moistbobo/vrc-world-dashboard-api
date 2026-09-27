@@ -13,13 +13,6 @@ export interface Queryable {
   withTransaction<T>(fn: (q: Queryable) => Promise<T>): Promise<T>;
 }
 
-function txQueryable(client: Queryable, pool: Pool): Queryable {
-  return {
-    query: (text, values) => client.query(text, values),
-    withTransaction: (fn) => runTransaction(pool, fn)
-  };
-}
-
 async function runTransaction<T>(
   pool: Pool,
   fn: (q: Queryable) => Promise<T>
@@ -27,14 +20,11 @@ async function runTransaction<T>(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const tx: Queryable = txQueryable(
-      {
-        query: (text, values) => client.query(text, values),
-        withTransaction: () =>
-          Promise.reject(new Error('nested transactions are not supported'))
-      },
-      pool
-    );
+    const tx: Queryable = {
+      query: (text, values) => client.query(text, values),
+      withTransaction: () =>
+        Promise.reject(new Error('nested transactions are not supported'))
+    };
     const result = await fn(tx);
     await client.query('COMMIT');
     return result;
