@@ -72,7 +72,3 @@ export function getHighPriorityRepository(): HighPriorityRepository {
   }
   return repoInstance;
 }
-
-export function resetHighPriorityRepository(): void {
-  repoInstance = null;
-}

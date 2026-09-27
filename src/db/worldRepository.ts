@@ -689,19 +689,6 @@ export class WorldRepository {
     );
     return result.rows[0]?.total ?? 0;
   }
-
-  /**
-   * The most recently processed world record.
-   */
-  async getLastProcessed(): Promise<WorldRecord | undefined> {
-    const result = await this.db.query<WorldRow>(
-      `SELECT * FROM world_records ORDER BY created_at DESC LIMIT 1`
-    );
-    const record = result.rows[0] ? rowToRecord(result.rows[0]) : undefined;
-    return record
-      ? (await this.attachJunction('tags', [record]))[0]
-      : undefined;
-  }
 }
 
 // Singleton instance
@@ -712,9 +699,4 @@ export function getWorldRepository(): WorldRepository {
     repoInstance = new WorldRepository();
   }
   return repoInstance;
-}
-
-/** Reset the singleton (useful in tests). */
-export function resetWorldRepository(): void {
-  repoInstance = null;
 }

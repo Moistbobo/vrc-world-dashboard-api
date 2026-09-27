@@ -143,12 +143,6 @@ export const customMatchers: Record<string, CustomMatcher> = {
   fox_yata9: { getWorldName: worldLineStripTags, getAuthorName: byLineValue }
 };
 
-export function extractWorldId(message: string): string | null {
-  if (!message) return null;
-  const match = message.match(VRCHAT_WORLD_ID_REGEX);
-  return match?.[0] ?? null;
-}
-
 /**
  * Returns every unique VRChat world id found in `text`, in order of first appearance.
  */

@@ -36,8 +36,3 @@ export function getTagRepository(): TagRepository {
   }
   return repoInstance;
 }
-
-/** Reset the singleton (useful in tests). */
-export function resetTagRepository(): void {
-  repoInstance = null;
-}

@@ -110,7 +110,3 @@ export function getRoleRepository(): RoleRepository {
   }
   return roleRepoInstance;
 }
-
-export function resetRoleRepository(): void {
-  roleRepoInstance = null;
-}
