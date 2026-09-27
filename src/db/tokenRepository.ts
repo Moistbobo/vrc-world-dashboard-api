@@ -98,8 +98,7 @@ export class TokenRepository {
 
   async findByHash(tokenHash: string): Promise<ApiTokenRecord | undefined> {
     const result = await this.db.query<TokenWithRoleRow>(
-      `SELECT t.id, t.token_hash, t.name, t.role_id, t.created_at, t.last_used_at, t.revoked_at,
-              r.name AS role_name, r.permissions AS role_permissions, r.created_at AS role_created_at
+      `SELECT t.*, r.name AS role_name, r.permissions AS role_permissions, r.created_at AS role_created_at
        FROM api_tokens t
        JOIN roles r ON r.id = t.role_id
        WHERE t.token_hash = $1
