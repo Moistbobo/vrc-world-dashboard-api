@@ -23,14 +23,16 @@ run('Postgres integration', () => {
   let worlds: WorldRepository;
 
   beforeAll(async () => {
-    pool = new Pool({ connectionString: url });
+    pool = new Pool({
+      connectionString: url,
+      options: `-c search_path=${schema}`
+    });
     const admin = new Pool({ connectionString: url });
     try {
       await pool.query(`CREATE SCHEMA "${schema}"`);
     } finally {
       await admin.end();
     }
-    await pool.query(`SET search_path TO "${schema}", public`);
     await runMigrations(createQueryable(pool));
     worlds = new WorldRepository(createQueryable(pool));
     await worlds.upsert({
