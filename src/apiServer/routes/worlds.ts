@@ -6,6 +6,8 @@ import {
 import { searchWorldsByName } from '../../vrchat/client';
 import { parseIntegerParam, parseStringListQuery } from '../utils/queryParams';
 import { sanitizeRecord } from '../utils/sanitize';
+import { checkRateLimit } from '../utils/rateLimit';
+import logger from '../../logger';
 import { requirePermission, type TokenRequest } from '../middleware/auth';
 import {
   decodeWorldsQueryParam,
@@ -163,6 +165,16 @@ router.post(
   '/api/worlds/query',
   requirePermission('worlds:query'),
   async (request: TokenRequest, response) => {
+    const startedAt = process.hrtime.bigint();
+
+    const { allowed, retryAfterSeconds } = checkRateLimit(
+      `token:${request.token!.id}`
+    );
+    if (!allowed) {
+      response.set('Retry-After', String(retryAfterSeconds));
+      return response.status(429).send({ error: 'Too many requests' });
+    }
+
     const body = request.body as unknown;
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       return response.status(400).send({ error: 'Body must be an object' });
@@ -236,6 +248,21 @@ router.post(
         sortField,
         sortOrder: sortDir === 'asc' ? 'asc' : 'desc'
       }
+    );
+
+    logger.info(
+      {
+        event: 'worlds_query',
+        role: request.token?.role.name,
+        groups: where.groups.length,
+        conditions: where.groups.reduce(
+          (total, group) => total + group.conditions.length,
+          0
+        ),
+        duration_ms: Number(process.hrtime.bigint() - startedAt) / 1e6,
+        total
+      },
+      'worlds query executed'
     );
 
     response.send({
