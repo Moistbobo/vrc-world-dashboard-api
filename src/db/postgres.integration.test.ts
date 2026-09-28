@@ -5,6 +5,7 @@ import { WorldRepository } from './worldRepository';
 import { HighPriorityRepository } from './highPriorityRepository';
 import { RoleRepository } from './roleRepository';
 import { TokenRepository } from './tokenRepository';
+import type { WorldsQuery } from '../worlds/query';
 
 /**
  * Real-Postgres integration suite. pg-mem cannot run `@>` / `&&` / unnest, so
@@ -22,14 +23,16 @@ run('Postgres integration', () => {
   let worlds: WorldRepository;
 
   beforeAll(async () => {
-    pool = new Pool({ connectionString: url });
+    pool = new Pool({
+      connectionString: url,
+      options: `-c search_path=${schema}`
+    });
     const admin = new Pool({ connectionString: url });
     try {
       await pool.query(`CREATE SCHEMA "${schema}"`);
     } finally {
       await admin.end();
     }
-    await pool.query(`SET search_path TO "${schema}", public`);
     await runMigrations(createQueryable(pool));
     worlds = new WorldRepository(createQueryable(pool));
     await worlds.upsert({
@@ -55,6 +58,20 @@ run('Postgres integration', () => {
       capacity: 32,
       platforms: ['android'],
       tags: ['game'],
+      imageUrl: null,
+      sourceContent: null,
+      vrchatData: null,
+      packageSizes: []
+    });
+    await worlds.upsert({
+      worldId: 'wrld_it3',
+      guildId: 'guild-1',
+      messageId: '3',
+      name: 'Мир',
+      authorName: 'Author',
+      capacity: 8,
+      platforms: [],
+      tags: [],
       imageUrl: null,
       sourceContent: null,
       vrchatData: null,
@@ -127,6 +144,51 @@ run('Postgres integration', () => {
       removed: true
     });
     expect(await hp.add('wrld_missing')).toEqual({ status: 'notFound' });
+  });
+
+  test('query DSL platform arrays and script run on real Postgres', async () => {
+    const hasPlatform = await worlds.getAllPaginated(10, 0, {
+      where: {
+        groups: [
+          {
+            connector: 'and',
+            conditions: [{ field: 'platform', op: 'has', value: 'android' }]
+          }
+        ]
+      }
+    });
+    expect(hasPlatform.total).toBe(2);
+
+    const hasAll: WorldsQuery = {
+      groups: [
+        {
+          connector: 'and',
+          conditions: [
+            {
+              field: 'platform',
+              op: 'hasAll',
+              values: ['standalonewindows', 'android']
+            }
+          ]
+        }
+      ]
+    };
+    const both = await worlds.getAllPaginated(10, 0, { where: hasAll });
+    expect(both.total).toBe(1);
+    expect(both.rows[0].worldId).toBe('wrld_it1');
+
+    const scripted = await worlds.getAllPaginated(10, 0, {
+      where: {
+        groups: [
+          {
+            connector: 'and',
+            conditions: [{ field: 'name', op: 'script', value: 'cyrillic' }]
+          }
+        ]
+      }
+    });
+    expect(scripted.total).toBe(1);
+    expect(scripted.rows[0].worldId).toBe('wrld_it3');
   });
 
   test('roles seed and token round-trip with RETURNING id', async () => {

@@ -2,6 +2,12 @@ import type { Queryable } from './client';
 import { getQueryable } from './pool';
 import { toNumber, toNumberOrNull, toArray } from './mappers';
 import type { MutationResult } from './mutationResult';
+import {
+  compileWorldsQuery,
+  resolveSortExpression,
+  type SortField,
+  type WorldsQuery
+} from '../worlds/query';
 import logger from '../logger';
 
 export interface WorldRecord {
@@ -40,6 +46,8 @@ export interface WorldFilters {
   dayRange?: number;
   highPriorityOnly?: boolean;
   sortOrder?: 'asc' | 'desc';
+  where?: WorldsQuery;
+  sortField?: SortField;
 }
 
 const JUNCTIONS = {
@@ -554,6 +562,11 @@ export class WorldRepository {
       );
     }
 
+    const worldsPredicate = compileWorldsQuery(filters?.where, params);
+    if (worldsPredicate) {
+      whereParts.push(`(${worldsPredicate})`);
+    }
+
     const whereClause =
       whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
 
@@ -573,6 +586,7 @@ export class WorldRepository {
   ): Promise<{ rows: WorldRecord[]; total: number }> {
     const { whereClause, params } = this.buildWhereClause(filters);
     const orderDirection = filters?.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    const orderExpression = resolveSortExpression(filters?.sortField);
 
     const countSql = `SELECT COUNT(*)::int as total FROM world_records wr ${whereClause}`;
     const selectSql = `
@@ -581,7 +595,7 @@ export class WorldRepository {
       LEFT JOIN high_priority_worlds hp
         ON hp.world_id = wr.world_id
       ${whereClause}
-      ORDER BY COALESCE(wr.internal_add_date, wr.created_at) ${orderDirection} LIMIT $${
+      ORDER BY ${orderExpression} ${orderDirection} LIMIT $${
         params.length + 1
       } OFFSET $${params.length + 2}
     `;

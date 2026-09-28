@@ -62,6 +62,10 @@ holding it, without re-provisioning tokens.
 | `viewer`  | `worlds:read`, `tags:read`, `meta:read`                        |
 | `curator` | viewer permissions plus `worlds:write`, `tags:write`           |
 | `admin`   | same as curator today; token generation is planned future work |
+| `bot`     | `worlds:read`, `tags:read`, `meta:read`, `worlds:query`        |
+
+The `bot` role is read-only and cannot mutate records; it exists so an
+automation token can run the query DSL without holding `worlds:write`.
 
 The seed roles are created automatically by the database migration. Custom
 roles can be defined:
@@ -86,6 +90,7 @@ pnpm role:update -- --name curator-v2 --add meta:read --remove tags:read
 | `tags:read`    | `GET /api/tags`                                                                                                                                                                                               |
 | `tags:write`   | `PUT /api/worlds/:worldId/tags/edit`                                                                                                                                                                          |
 | `meta:read`    | `GET /api/meta`                                                                                                                                                                                               |
+| `worlds:query` | `POST /api/worlds/query`                                                                                                                                                                                      |
 
 `GET /api/me` requires no specific permission — any valid token can read its own
 identity.
@@ -163,6 +168,8 @@ Returns a paginated, filterable list of world records.
 | `worldId`      | string / string[] | —         | —   | Filter to specific world ID(s). Comma-separated or repeated. Exact match only.                                                                                                                                                                                                |
 | `dayRange`     | integer           | —         | 365 | Return only worlds tagged within the last N days. Values below `0` are treated as `0` (no filter); values above `365` are clamped to `365`. Tagged date uses `internal_add_date` when present, otherwise falls back to `created_at`.                                          |
 | `highPriority` | boolean           | —         | —   | When `true`, return only high-priority worlds. Requires `worlds:write`; viewer tokens get `403 Forbidden`.                                                                                                                                                                    |
+| `where`        | string            | —         | —   | A base64url-encoded query DSL tree (see [Query Worlds](#19-query-worlds)). Combined with the flat filters above using AND logic. Invalid trees return `400 Bad Request`.                                                                                                      |
+| `sortField`    | string            | `addedAt` | —   | Sort column. One of `addedAt` (tagged date), `createdAt`, `updatedAt`, `capacity`, `name`, `author`, `quality`. Unknown values are ignored. Use `order` for direction. |
 
 **Response**
 
@@ -813,6 +820,114 @@ Requires the `tags:read` permission (same gate as `GET /api/tags`).
 | ------ | ----------------------------- |
 | `401`  | `{ "error": "Unauthorized" }` |
 | `403`  | `{ "error": "Forbidden" }`    |
+
+---
+
+### 19. Query Worlds
+
+```
+POST /api/worlds/query
+```
+
+Requires the `worlds:query` permission. Evaluates a validated boolean query
+tree over world records. The same tree can be sent to `GET /api/worlds` as a
+base64url-encoded `where` parameter (see
+[List Worlds](#2-list-worlds)), which requires only `worlds:read`.
+
+**Request body**
+
+```json
+{
+  "query": {
+    "groups": [
+      {
+        "connector": "or",
+        "conditions": [{ "field": "tag", "op": "has", "value": "kino" }]
+      },
+      {
+        "connector": "or",
+        "conditions": [{ "field": "tag", "op": "has", "value": "horror" }]
+      }
+    ]
+  },
+  "sortField": "capacity",
+  "sortDir": "asc",
+  "limit": 50,
+  "offset": 0
+}
+```
+
+| Field       | Type    | Default   | Description                                                                                                                              |
+| ----------- | ------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`     | object  | required  | The query tree. Must be an object or the request returns `400 Bad Request`.                                                              |
+| `sortField` | string  | `addedAt` | One of `addedAt`, `createdAt`, `updatedAt`, `capacity`, `name`, `author`, `quality`. Any other value returns `400 Bad Request`.            |
+| `sortDir`   | string  | `desc`    | `asc` or `desc`. Any other value returns `400 Bad Request`.                                                                              |
+| `limit`     | integer | `50`      | Clamped to at most `500` (`1000` becomes `500`). A non-integer or non-positive value returns `400 Bad Request`.                          |
+| `offset`    | integer | `0`       | Must be ≥ 0; a non-integer or negative value returns `400 Bad Request`.                                                                  |
+
+**Response**
+
+Same shape as `GET /api/worlds`: `{ "total", "limit", "offset", "worlds" }`.
+`quality`, `highPriority`, and `guildId` are present only for tokens with
+`worlds:write`.
+
+**Grammar**
+
+```text
+{ "groups": [ { "connector": "and" | "or", "conditions": [ condition, ... ] }, ... ] }
+```
+
+The top level ORs the groups. A group joins its conditions with AND or OR per
+its `connector`. A group with no conditions is dropped; a tree with no
+conditions runs unfiltered.
+
+A condition is `{ "field", "op", "value"?, "value2"?, "values"?, "negate"? }`.
+
+| Field                              | Operators                                            | Notes                                                                                                                                                  |
+| ---------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`, `author`, `worldId`, `source` | `eq`, `ne`, `in`, `contains`, `prefix`, `not_contains`, `script` | `contains` and `prefix` are case-insensitive. `script` takes a named pattern: `latin`, `cyrillic`, `greek`, `cjk`, `japanese`, `korean`, or `arabic`. |
+| `capacity`                         | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `between`, `in` | Integers from 1 to 80. `between` requires `value <= value2`.                                                                                            |
+| `addedAt`, `createdAt`, `updatedAt` | `before`, `after`, `between`                          | ISO 8601 date strings. An unparseable date or a reversed `between` returns `400 Bad Request`. `addedAt` uses `internal_add_date` with a `created_at` fallback. |
+| `platform`                         | `has`, `hasAny`, `hasAll`, `not_has`                  | `has`/`not_has` take `value`; `hasAny`/`hasAll` take `values`.                                                                                          |
+| `tag`, `flag`                      | `has`, `hasAny`, `hasAll`, `not_has`                  | Same value shapes as `platform`. An unknown tag or flag value is bound as a string and matches nothing.                                                 |
+| `quality`                          | `eq`, `ne`, `isNull`                                  | `value` is `good`, `bad`, or `null`.                                                                                                                    |
+| `highPriority`                     | `eq`                                                  | `value` is `true` or `false`.                                                                                                                          |
+
+`negate: true` inverts a condition. Negative operators (`ne`, `not_contains`,
+`not_has`) combined with `negate` normalize to their positive form.
+
+**Caps**
+
+| Cap                          | Limit |
+| ---------------------------- | ----- |
+| Groups                       | 8     |
+| Conditions per group         | 8     |
+| Total conditions             | 64    |
+| Values per condition         | 20    |
+| Characters per value         | 200   |
+
+Any violation returns `400 Bad Request` with a message naming the offending
+field and operator.
+
+Every value is bound as a query parameter, so a value such as
+`'; DROP TABLE world_records; --` is treated as data and cannot execute SQL.
+
+**GET `where` parameter**
+
+The `where` parameter is the base64url (RFC 4648 §5, `-` and `_`, no padding)
+encoding of the UTF-8 JSON tree. Passing the same tree to `GET /api/worlds`
+and to the POST yields the same result set.
+
+```text
+GET /api/worlds?where=eyJncm91cHMiOlt7ImNvbm5lY3RvciI6Im9yIiwiY29uZGl0aW9ucyI6W3siZmllbGQiOiJ0YWciLCJvcCI6ImhhcyIsInZhbHVlIjoia2lubyJ9XX1dfQ
+```
+
+**Errors**
+
+| Status | Body                              | Cause                                                                            |
+| ------ | --------------------------------- | -------------------------------------------------------------------------------- |
+| `400`  | `{ "error": "<message>" }`        | Malformed tree, unknown field or operator, out-of-range value, or bad pagination. |
+| `403`  | `{ "error": "Forbidden" }`        | Token lacks `worlds:query`.                                                       |
 
 ---
 

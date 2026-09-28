@@ -431,6 +431,16 @@ export const MIGRATIONS: Migration[] = [
          ON world_records (COALESCE(internal_add_date, created_at))`
       );
     }
+  },
+  {
+    name: '017_add_bot_role',
+    run: async (db) => {
+      await db.query(
+        `INSERT INTO roles (name, permissions) VALUES ($1, $2::text[])
+         ON CONFLICT (name) DO NOTHING`,
+        ['bot', ['worlds:read', 'tags:read', 'meta:read', 'worlds:query']]
+      );
+    }
   }
 ];
 

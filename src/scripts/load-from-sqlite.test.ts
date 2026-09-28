@@ -80,7 +80,7 @@ function createFixture(dbPath: string): DatabaseSync {
     `INSERT INTO roles (id, name, permissions, created_at) VALUES (?, ?, ?, ?)`
   );
   roles.run(1, 'viewer', '["worlds:read","tags:read","meta:read"]', 1710000000);
-  roles.run(4, 'editor', '["worlds:read","worlds:write"]', 1710000001);
+  roles.run(5, 'editor', '["worlds:read","worlds:write"]', 1710000001);
 
   const tokens = db.prepare(
     `INSERT INTO api_tokens
@@ -88,12 +88,12 @@ function createFixture(dbPath: string): DatabaseSync {
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   );
   tokens.run(1, 'hash_viewer', 'viewer-token', 1, 1710000002, 1710000100, null);
-  tokens.run(2, 'hash_editor', 'editor-token', 4, 1710000003, null, null);
+  tokens.run(2, 'hash_editor', 'editor-token', 5, 1710000003, null, null);
   tokens.run(
     3,
     'hash_revoked',
     'revoked-token',
-    4,
+    5,
     1710000004,
     1710000200,
     1710000300
@@ -232,7 +232,7 @@ describe('load-from-sqlite', () => {
       created_at: number;
     }>(`SELECT id, name, permissions, created_at FROM roles ORDER BY id`);
 
-    expect(roles.rows).toHaveLength(4);
+    expect(roles.rows).toHaveLength(5);
     const viewer = roles.rows.find((r) => r.name === 'viewer')!;
     expect(viewer.id).toBe(1);
     expect(viewer.permissions).toEqual([
@@ -241,7 +241,7 @@ describe('load-from-sqlite', () => {
       'meta:read'
     ]);
     const editor = roles.rows.find((r) => r.name === 'editor')!;
-    expect(editor.id).toBe(4);
+    expect(editor.id).toBe(5);
     expect(editor.permissions).toEqual(['worlds:read', 'worlds:write']);
   });
 
@@ -261,10 +261,10 @@ describe('load-from-sqlite', () => {
 
     expect(tokens.rows).toHaveLength(3);
     expect(tokens.rows[0]).toMatchObject({ name: 'viewer-token', role_id: 1 });
-    expect(tokens.rows[1]).toMatchObject({ name: 'editor-token', role_id: 4 });
+    expect(tokens.rows[1]).toMatchObject({ name: 'editor-token', role_id: 5 });
     expect(tokens.rows[2]).toMatchObject({
       name: 'revoked-token',
-      role_id: 4,
+      role_id: 5,
       revoked_at: 1710000300
     });
   });
@@ -370,7 +370,7 @@ describe('load-from-sqlite', () => {
        UNION ALL SELECT 'high_priority_worlds', COUNT(*)::int FROM high_priority_worlds`
     );
     expect(counts.rows).toEqual([
-      { t: 'roles', n: 4 },
+      { t: 'roles', n: 5 },
       { t: 'api_tokens', n: 3 },
       { t: 'world_records', n: 2 },
       { t: 'world_tags', n: 2 },
