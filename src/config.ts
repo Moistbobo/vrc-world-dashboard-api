@@ -20,9 +20,6 @@ const Config = {
     : [],
   DATABASE_PATH: process.env.DATABASE_PATH || './worlds.db',
   DATABASE_URL: process.env.DATABASE_URL || '',
-  LLM_EXTRACTOR_URL: process.env.LLM_EXTRACTOR_URL || '',
-  LLM_EXTRACTOR_TIMEOUT_MS:
-    Number(process.env.LLM_EXTRACTOR_TIMEOUT_MS) || 10000,
   API_PORT: Number(process.env.API_PORT) || 3000,
   API_HOST: process.env.API_HOST || '0.0.0.0',
   API_ALLOWED_ORIGINS: process.env.API_ALLOWED_ORIGINS
