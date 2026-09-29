@@ -16,14 +16,6 @@ export class FlagRepository {
     return result.rows.map((r) => r.flag);
   }
 
-  async getByWorld(worldId: string): Promise<string[]> {
-    const result = await this.db.query<{ flag: string }>(
-      `SELECT flag FROM world_flags WHERE world_id = $1 ORDER BY flag`,
-      [worldId]
-    );
-    return result.rows.map((r) => r.flag);
-  }
-
   /**
    * Replace the flags on a world with the given set. Deletes existing junction
    * rows for the world, then inserts one row per flag. Must run inside a
@@ -100,9 +92,4 @@ export function getFlagRepository(): FlagRepository {
     repoInstance = new FlagRepository();
   }
   return repoInstance;
-}
-
-/** Reset the singleton (useful in tests). */
-export function resetFlagRepository(): void {
-  repoInstance = null;
 }

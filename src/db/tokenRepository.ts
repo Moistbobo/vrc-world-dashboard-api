@@ -163,7 +163,3 @@ export function getTokenRepository(): TokenRepository {
   }
   return tokenRepoInstance;
 }
-
-export function resetTokenRepository(): void {
-  tokenRepoInstance = null;
-}

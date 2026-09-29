@@ -135,11 +135,9 @@ describe('flagRepository', () => {
     expect(await repo.getAll()).toEqual([...FLAG_SEED].sort());
   });
 
-  it('getByWorld returns an empty array for a world with no flags', async () => {
+  it('reports no flags for a world with no world_flags rows', async () => {
     await addWorld(queryable, 'wrld_abc');
-    expect(await new FlagRepository(queryable).getByWorld('wrld_abc')).toEqual(
-      []
-    );
+    expect(await worldFlags(queryable, 'wrld_abc')).toEqual([]);
   });
 
   it('replaceWorldFlags replaces the full set and records added_by_token_id', async () => {
@@ -158,7 +156,10 @@ describe('flagRepository', () => {
         record.id
       )
     ).toEqual({ status: 'ok', updated: true });
-    expect(await repo.getByWorld('wrld_abc')).toEqual(['furry', 'low quality']);
+    expect(await worldFlags(queryable, 'wrld_abc')).toEqual([
+      'furry',
+      'low quality'
+    ]);
 
     const tokenRows = await queryable.query<{ added_by_token_id: number }>(
       'SELECT DISTINCT added_by_token_id FROM world_flags WHERE world_id = $1',
@@ -170,7 +171,7 @@ describe('flagRepository', () => {
       status: 'ok',
       updated: true
     });
-    expect(await repo.getByWorld('wrld_abc')).toEqual(['AI slop']);
+    expect(await worldFlags(queryable, 'wrld_abc')).toEqual(['AI slop']);
   });
 
   it('replaceWorldFlags reports unchanged when the set is unchanged', async () => {
@@ -180,7 +181,10 @@ describe('flagRepository', () => {
     expect(
       await repo.replaceWorldFlags('wrld_abc', ['low quality', 'furry'])
     ).toEqual({ status: 'ok', updated: false });
-    expect(await repo.getByWorld('wrld_abc')).toEqual(['furry', 'low quality']);
+    expect(await worldFlags(queryable, 'wrld_abc')).toEqual([
+      'furry',
+      'low quality'
+    ]);
   });
 
   it('replaceWorldFlags reports notFound for a missing world', async () => {
@@ -198,7 +202,7 @@ describe('flagRepository', () => {
       status: 'ok',
       updated: true
     });
-    expect(await repo.getByWorld('wrld_abc')).toEqual([]);
+    expect(await worldFlags(queryable, 'wrld_abc')).toEqual([]);
   });
 
   it('countByFlag counts flags actually present', async () => {
@@ -233,4 +237,15 @@ async function addWorld(
     packageSizes: [],
     createdAt: 1717257600
   });
+}
+
+async function worldFlags(
+  queryable: TestDb['queryable'],
+  worldId: string
+): Promise<string[]> {
+  const result = await queryable.query<{ flag: string }>(
+    'SELECT flag FROM world_flags WHERE world_id = $1 ORDER BY flag',
+    [worldId]
+  );
+  return result.rows.map((r) => r.flag);
 }
