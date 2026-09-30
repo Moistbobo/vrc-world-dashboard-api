@@ -88,24 +88,11 @@ export const MIGRATIONS: Migration[] = [
       );
     }
   },
-  {
-    name: '003_add_quality_column',
-    run: async () => {
-      // quality is part of the base world_records table above.
-    }
-  },
-  {
-    name: '004_add_capacity_index',
-    run: async () => {
-      // capacity index is part of the base world_records table above.
-    }
-  },
-  {
-    name: '005_add_internal_add_date_column',
-    run: async () => {
-      // internal_add_date is part of the base world_records table above.
-    }
-  },
+  // 003_add_quality_column, 004_add_capacity_index,
+  // 005_add_internal_add_date_column, and 007_add_package_sizes_column are
+  // folded into 001_create_world_records. Their work shipped there, and
+  // existing databases already recorded these names in _migrations, so the
+  // names are reserved and must not be reused for new migrations.
   {
     name: '006_create_roles_and_api_tokens',
     run: async (db) => {
@@ -153,12 +140,6 @@ export const MIGRATIONS: Migration[] = [
           ['worlds:read', 'tags:read', 'meta:read', 'worlds:write']
         ]
       );
-    }
-  },
-  {
-    name: '007_add_package_sizes_column',
-    run: async () => {
-      // package_sizes is part of the base world_records table above.
     }
   },
   {
