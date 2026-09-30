@@ -3,11 +3,16 @@ import { createStream } from 'rotating-file-stream';
 import { Axiom } from '@axiomhq/js';
 import Config from './config';
 
-const stream = createStream('tslog.log', {
-  size: '10M',
-  interval: '7d',
-  compress: 'gzip'
-});
+const isTest = Boolean(process.env.VITEST) || process.env.NODE_ENV === 'test';
+
+const stream =
+  Config.LOG_FILE && !isTest
+    ? createStream(Config.LOG_FILE, {
+        size: '10M',
+        interval: '7d',
+        compress: 'gzip'
+      })
+    : null;
 
 const axiomEnabled = Boolean(Config.AXIOM_TOKEN && Config.AXIOM_DATASET);
 
@@ -26,7 +31,8 @@ export function flushLogs(): Promise<void> {
   return axiom ? axiom.flush() : Promise.resolve();
 }
 
-const logger = new Logger({
+export const logger = new Logger({
+  minLevel: Config.LOG_LEVEL,
   prettyLogTemplate:
     '{{yyyy}}.{{mm}}.{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}}\t{{logLevelName}}\t[{{filePathWithLine}}{{name}}]\t',
   prettyErrorTemplate:
@@ -59,7 +65,9 @@ const logger = new Logger({
 });
 
 logger.attachTransport((logObj) => {
-  stream.write(JSON.stringify(logObj) + '\n');
+  if (stream) {
+    stream.write(JSON.stringify(logObj) + '\n');
+  }
   if (axiom) {
     const meta = logObj._meta as { date?: Date } | undefined;
     const _time = meta?.date

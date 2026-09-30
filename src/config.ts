@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { DefaultLogLevels, type TLogLevelName } from 'tslog';
 
 dotenv.config();
 
@@ -6,6 +7,15 @@ function rateNumber(raw: string | undefined, fallback: number): number {
   if (raw === undefined || raw === '') return fallback;
   const value = Number(raw);
   return Number.isFinite(value) ? value : fallback;
+}
+
+const LOG_LEVEL_NAMES = Object.keys(DefaultLogLevels).filter(
+  (key): key is TLogLevelName => Number.isNaN(Number(key))
+);
+
+function parseLogLevel(raw: string | undefined): TLogLevelName {
+  const name = (raw ?? '').toUpperCase();
+  return LOG_LEVEL_NAMES.find((level) => level === name) ?? 'INFO';
 }
 
 const Config = {
@@ -40,7 +50,9 @@ const Config = {
   AXIOM_TOKEN: process.env.AXIOM_TOKEN || '',
   AXIOM_DATASET: process.env.AXIOM_DATASET || '',
   AXIOM_EDGE: process.env.AXIOM_EDGE || '',
-  AXIOM_ORG_ID: process.env.AXIOM_ORG_ID || ''
+  AXIOM_ORG_ID: process.env.AXIOM_ORG_ID || '',
+  LOG_FILE: process.env.LOG_FILE || '',
+  LOG_LEVEL: parseLogLevel(process.env.LOG_LEVEL)
 };
 
 export default Config;
