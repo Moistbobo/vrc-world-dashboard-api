@@ -6,7 +6,7 @@ import { createQueryable, Queryable } from './client';
 let pool: Pool | null = null;
 
 /**
- * Lazily-created Postgres connection pool (lazy so jest-mocked config never
+ * Lazily-created Postgres connection pool (lazy so vitest-mocked config never
  * builds a live pool at import time).
  */
 export function getPool(): Pool {
