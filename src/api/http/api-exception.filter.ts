@@ -19,13 +19,13 @@ function resolveStatusCode(exception: unknown): number {
 }
 
 function resolveMessage(exception: unknown, statusCode: number): string {
-  if (statusCode >= 500) return 'Internal Server Error';
-
   if (exception instanceof HttpException) {
     const message = exception.message;
     if (FRAMEWORK_ROUTE_MISS.test(message)) return 'Not Found';
     return message || 'Unknown error';
   }
+
+  if (statusCode >= 500) return 'Internal Server Error';
 
   if (exception instanceof Error) {
     return exception.message || 'Unknown error';
@@ -42,7 +42,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
 
     const statusCode = resolveStatusCode(exception);
 
-    if (statusCode >= 500) {
+    // Unhandled failures are logged; deliberate HttpExceptions (the old routes
+    // answered these directly) were never logged by errorHandler.
+    if (statusCode >= 500 && !(exception instanceof HttpException)) {
       logger.error(
         `API error [${statusCode}] ${request.method} ${request.originalUrl}:`
       );

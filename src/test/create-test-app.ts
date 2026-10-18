@@ -12,22 +12,38 @@ import { TagRepository } from '../db/tagRepository';
 import { FlagRepository } from '../db/flagRepository';
 import { HighPriorityRepository } from '../db/highPriorityRepository';
 import { TokenRepository } from '../db/tokenRepository';
+import { QUERYABLE } from '../api/database.module';
+import type { Queryable } from '../db/client';
 
 /**
  * Provider overrides for `createTestApp`. Any repository left out keeps the
  * real implementation (used by the Postgres smoke test).
  */
 export interface TestAppOverrides {
-  worlds?: WorldRepository;
-  tags?: TagRepository;
-  flags?: FlagRepository;
-  highPriority?: HighPriorityRepository;
-  tokens?: TokenRepository;
+  worlds?: unknown;
+  tags?: unknown;
+  flags?: unknown;
+  highPriority?: unknown;
+  tokens?: unknown;
 }
 
 export interface TestApp {
   app: INestApplication;
   moduleRef: TestingModule;
+}
+
+function createStubQueryable(): Queryable {
+  const queryable: Queryable = {
+    query: async () => ({
+      rows: [],
+      rowCount: 0,
+      command: '',
+      oid: 0,
+      fields: []
+    }),
+    withTransaction: async (fn) => fn(queryable)
+  };
+  return queryable;
 }
 
 /**
@@ -43,6 +59,13 @@ export async function createTestApp(
   })
     .overrideProvider(BootstrapService)
     .useValue({ onApplicationBootstrap: async () => undefined });
+
+  const hasOverrides = Object.values(overrides).some(Boolean);
+  if (hasOverrides) {
+    builder = builder
+      .overrideProvider(QUERYABLE)
+      .useValue(createStubQueryable());
+  }
 
   if (overrides.worlds) {
     builder = builder
