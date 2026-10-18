@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 
@@ -43,11 +51,7 @@ import {
   createTagRepositoryMock,
   createTokenRecord,
   createTokenRepositoryMock,
-  createWorldRepositoryMock,
-  type FlagRepositoryMock,
-  type TagRepositoryMock,
-  type TokenRepositoryMock,
-  type WorldRepositoryMock
+  createWorldRepositoryMock
 } from '../../test/mocks';
 import { TAG_SEED } from '../../db/tagSeed';
 import { searchWorldsByName } from '../../vrchat/client';
@@ -78,10 +82,10 @@ function worldRow() {
 
 describe('API Server', () => {
   let app: INestApplication;
-  let worlds: WorldRepositoryMock;
-  let tokens: TokenRepositoryMock;
-  let tags: TagRepositoryMock;
-  let flags: FlagRepositoryMock;
+  const worlds = createWorldRepositoryMock();
+  const tokens = createTokenRepositoryMock();
+  const tags = createTagRepositoryMock();
+  const flags = createFlagRepositoryMock();
 
   function stubWorldRepository() {
     worlds.count.mockResolvedValue(1428);
@@ -108,18 +112,17 @@ describe('API Server', () => {
     worlds.getAllPaginated.mockResolvedValue({ total: 0, rows: [] });
   }
 
-  beforeEach(async () => {
-    worlds = createWorldRepositoryMock();
-    tokens = createTokenRepositoryMock();
-    tags = createTagRepositoryMock();
-    flags = createFlagRepositoryMock();
-    tokens.findByHash.mockReturnValue(createTokenRecord());
+  beforeAll(async () => {
     ({ app } = await createTestApp({ worlds, tags, flags, tokens }));
   });
 
-  afterEach(async () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    tokens.findByHash.mockReturnValue(createTokenRecord());
+  });
+
+  afterAll(async () => {
     await app.close();
-    vi.clearAllMocks();
   });
 
   describe('GET /api/health', () => {

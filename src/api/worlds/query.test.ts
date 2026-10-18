@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 
@@ -98,16 +106,19 @@ describe('worlds query API', () => {
     );
   }
 
-  beforeEach(async () => {
-    resetRateLimits();
-    worlds.getAllPaginated.mockResolvedValue({ total: 1, rows: [WORLD_ROW] });
-    mockTokenRepo();
+  beforeAll(async () => {
     ({ app } = await createTestApp({ worlds, tokens }));
   });
 
-  afterEach(async () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    resetRateLimits();
+    worlds.getAllPaginated.mockResolvedValue({ total: 1, rows: [WORLD_ROW] });
+    mockTokenRepo();
+  });
+
+  afterAll(async () => {
     await app.close();
-    vi.clearAllMocks();
   });
 
   describe('POST /api/worlds/query', () => {

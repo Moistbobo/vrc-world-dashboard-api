@@ -94,6 +94,9 @@ export async function createTestApp(
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app);
-  await app.init();
+  // Listen once on an ephemeral port for the file's lifetime. If the server is
+  // not listening, supertest opens and closes it around every request, which
+  // intermittently collides on reused ports when files run in parallel.
+  await app.listen(0);
   return { app, moduleRef };
 }

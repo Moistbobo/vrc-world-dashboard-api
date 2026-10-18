@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 
@@ -96,16 +104,19 @@ describe('High priority worlds API', () => {
     Object.assign(highPriority, overrides);
   }
 
-  beforeEach(async () => {
-    mockTokenRepo();
-    mockWorldRepo();
-    mockHpRepo();
+  beforeAll(async () => {
     ({ app } = await createTestApp({ worlds, highPriority, tokens }));
   });
 
-  afterEach(async () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockTokenRepo();
+    mockWorldRepo();
+    mockHpRepo();
+  });
+
+  afterAll(async () => {
     await app.close();
-    vi.clearAllMocks();
   });
 
   describe('PUT /api/worlds/:worldId/high-priority', () => {

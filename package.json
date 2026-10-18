@@ -2,9 +2,9 @@
   "name": "sos-world-tagger-api",
   "version": "0.4.0",
   "packageManager": "pnpm@9.15.0",
-  "main": "dist/index.js",
+  "main": "dist/main.js",
   "scripts": {
-    "start": "node node_modules/typescript7/bin/tsc && node dist/index.js",
+    "start": "node node_modules/typescript7/bin/tsc && node dist/main.js",
     "build": "node node_modules/typescript7/bin/tsc",
     "typecheck": "node node_modules/typescript7/bin/tsc --noEmit",
     "test": "vitest run",

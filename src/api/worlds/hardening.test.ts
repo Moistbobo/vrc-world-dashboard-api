@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 
@@ -90,7 +98,12 @@ describe('worlds query hardening', () => {
   const worlds = createWorldRepositoryMock();
   const tokens = createTokenRepositoryMock();
 
-  beforeEach(async () => {
+  beforeAll(async () => {
+    ({ app } = await createTestApp({ worlds, tokens }));
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
     resetRateLimits();
     mockConfig.WORLDS_QUERY_RATE_LIMIT = 2;
     mockConfig.WORLDS_QUERY_RATE_WINDOW_MS = 60000;
@@ -102,12 +115,10 @@ describe('worlds query hardening', () => {
         permissions: ['worlds:read', 'worlds:write', 'worlds:query']
       })
     );
-    ({ app } = await createTestApp({ worlds, tokens }));
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await app.close();
-    vi.clearAllMocks();
   });
 
   it('AC-1 rate limits per token and never queries on the denied request', async () => {

@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 
@@ -29,7 +37,7 @@ vi.mock('../../logger', () => ({
 }));
 
 import { createTestApp } from '../../test/create-test-app';
-import { TokenRepository } from '../../db/tokenRepository';
+import { createTokenRepositoryMock } from '../../test/mocks';
 import type { Permission } from '../../auth/permissions';
 
 const AUTH = { authorization: 'Bearer test-token' };
@@ -49,10 +57,15 @@ function tokenRecord(roleName: string, permissions: Permission[]) {
 
 describe('GET /api/me', () => {
   let app: INestApplication;
-  let findByHash: ReturnType<typeof vi.fn>;
+  const tokens = createTokenRepositoryMock();
 
-  beforeEach(async () => {
-    findByHash = vi.fn(() =>
+  beforeAll(async () => {
+    ({ app } = await createTestApp({ tokens }));
+  });
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    tokens.findByHash.mockReturnValue(
       tokenRecord('admin', [
         'worlds:read',
         'tags:read',
@@ -60,16 +73,10 @@ describe('GET /api/me', () => {
         'worlds:write'
       ])
     );
-    const tokens = {
-      findByHash,
-      touchLastUsed: vi.fn()
-    } as unknown as TokenRepository;
-    ({ app } = await createTestApp({ tokens }));
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     await app.close();
-    vi.clearAllMocks();
   });
 
   it('returns 401 without a token', async () => {
@@ -93,7 +100,7 @@ describe('GET /api/me', () => {
   });
 
   it('does not gate on permissions: viewer tokens succeed', async () => {
-    findByHash.mockReturnValue(
+    tokens.findByHash.mockReturnValue(
       tokenRecord('viewer', ['worlds:read', 'tags:read', 'meta:read'])
     );
 

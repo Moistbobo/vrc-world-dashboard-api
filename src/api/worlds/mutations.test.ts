@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 
@@ -63,11 +71,7 @@ import {
   createHighPriorityRepositoryMock,
   createTokenRecord,
   createTokenRepositoryMock,
-  createWorldRepositoryMock,
-  type FlagRepositoryMock,
-  type HighPriorityRepositoryMock,
-  type TokenRepositoryMock,
-  type WorldRepositoryMock
+  createWorldRepositoryMock
 } from '../../test/mocks';
 import { addWorld, WorldServiceError } from '../../worlds/service';
 import { extractAllWorldIdsFromMessage } from '../../extraction/pipeline';
@@ -85,10 +89,10 @@ const VALID_BODY = {
 
 describe('API mutations', () => {
   let app: INestApplication;
-  let worlds: WorldRepositoryMock;
-  let flags: FlagRepositoryMock;
-  let highPriority: HighPriorityRepositoryMock;
-  let tokens: TokenRepositoryMock;
+  const worlds = createWorldRepositoryMock();
+  const flags = createFlagRepositoryMock();
+  const highPriority = createHighPriorityRepositoryMock();
+  const tokens = createTokenRepositoryMock();
 
   function mockTokenRepo(
     permissions: Permission[] = [
@@ -101,18 +105,17 @@ describe('API mutations', () => {
     tokens.findByHash.mockReturnValue(createTokenRecord({ permissions }));
   }
 
-  beforeEach(async () => {
-    worlds = createWorldRepositoryMock();
-    flags = createFlagRepositoryMock();
-    highPriority = createHighPriorityRepositoryMock();
-    tokens = createTokenRepositoryMock();
-    mockTokenRepo();
+  beforeAll(async () => {
     ({ app } = await createTestApp({ worlds, flags, highPriority, tokens }));
   });
 
-  afterEach(async () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockTokenRepo();
+  });
+
+  afterAll(async () => {
     await app.close();
-    vi.clearAllMocks();
   });
 
   describe('POST /api/worlds', () => {
