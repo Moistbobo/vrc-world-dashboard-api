@@ -7,7 +7,8 @@ import {
   extractWithCustomMatcher,
   extractAllWorldIds,
   extractAllLinks,
-  isTwitterLink
+  isTwitterLink,
+  removeLinksFromTweet
 } from './regex';
 
 // Mock the config to avoid environment variable dependencies
@@ -418,6 +419,36 @@ describe('regex', () => {
     });
   });
 
+  describe('shared matcher strategies', () => {
+    it('exposes getWorldName and getAuthorName as functions for every matcher', () => {
+      for (const matcher of Object.values(customMatchers)) {
+        expect(typeof matcher.getWorldName).toBe('function');
+        expect(typeof matcher.getAuthorName).toBe('function');
+      }
+    });
+
+    it('reuses firstLine across matchers that read the first line', () => {
+      expect(customMatchers.n4rGm5DmrVXXz6I.getWorldName).toBe(
+        customMatchers.YSoSerious_VR.getWorldName
+      );
+      expect(customMatchers.YSoSerious_VR.getWorldName).toBe(
+        customMatchers.yonesuke2.getWorldName
+      );
+    });
+
+    it('reuses secondLineAfterBy across matchers that strip By from the second line', () => {
+      expect(customMatchers.YSoSerious_VR.getAuthorName).toBe(
+        customMatchers.yonesuke2.getAuthorName
+      );
+    });
+
+    it('creates a distinct japaneseLabeled extractor per label', () => {
+      expect(customMatchers.tetra_moon.getWorldName).not.toBe(
+        customMatchers.tetra_moon.getAuthorName
+      );
+    });
+  });
+
   describe('extractWithCustomMatcher', () => {
     const ysoTweet =
       'day by day\n' +
@@ -583,7 +614,7 @@ describe('regex', () => {
       ).toBeNull();
     });
 
-    it('returns null for invalid inputs', () => {
+    it('returns null when inputs are empty or falsy', () => {
       expect(extractWithCustomMatcher('', ysoTweet)).toBeNull();
       expect(
         extractWithCustomMatcher('https://twitter.com/YSoSerious_VR', '')
@@ -600,12 +631,15 @@ describe('regex', () => {
       expect(
         extractWithCustomMatcher(123 as unknown as string, ysoTweet)
       ).toBeNull();
-      expect(
+    });
+
+    it('propagates a type violation from a matching matcher', () => {
+      expect(() =>
         extractWithCustomMatcher(
           'https://twitter.com/YSoSerious_VR',
           123 as unknown as string
         )
-      ).toBeNull();
+      ).toThrow();
     });
   });
 
@@ -783,6 +817,26 @@ describe('regex', () => {
 
     it('finds an id embedded in a filename', () => {
       expect(extractAllWorldIds(`screenshot-${id1}.png`)).toEqual([id1]);
+    });
+  });
+
+  describe('removeLinksFromTweet', () => {
+    it('strips http, https, and www links then trims', () => {
+      expect(
+        removeLinksFromTweet('World: Tokyo Mood https://t.co/abc By: Alice')
+      ).toBe('World: Tokyo Mood  By: Alice');
+      expect(removeLinksFromTweet('Visit www.example.com now')).toBe(
+        'Visit  now'
+      );
+      expect(removeLinksFromTweet('  padded https://a.com  ')).toBe('padded');
+    });
+
+    it('leaves content without links untouched apart from trimming', () => {
+      expect(removeLinksFromTweet('  plain text  ')).toBe('plain text');
+    });
+
+    it('throws for non-string content', () => {
+      expect(() => removeLinksFromTweet(null as never)).toThrow();
     });
   });
 });

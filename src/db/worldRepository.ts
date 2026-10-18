@@ -1,6 +1,13 @@
 import type { Queryable } from './client';
 import { getQueryable } from './pool';
 import { toNumber, toNumberOrNull, toArray } from './mappers';
+import type { MutationResult } from './mutationResult';
+import {
+  compileWorldsQuery,
+  resolveSortExpression,
+  type SortField,
+  type WorldsQuery
+} from '../worlds/query';
 import logger from '../logger';
 
 export interface WorldRecord {
@@ -23,6 +30,30 @@ export interface WorldRecord {
   updatedAt?: number;
   internalAddDate?: number | null;
 }
+
+export interface WorldFilters {
+  tags?: string[];
+  excludeFlags?: string[];
+  flagMode?: 'include' | 'exclude';
+  platforms?: string[];
+  guildId?: string;
+  quality?: ('good' | 'bad')[];
+  qualityMode?: 'exclude';
+  search?: string;
+  minCapacity?: number;
+  maxCapacity?: number;
+  worldIds?: string[];
+  dayRange?: number;
+  highPriorityOnly?: boolean;
+  sortOrder?: 'asc' | 'desc';
+  where?: WorldsQuery;
+  sortField?: SortField;
+}
+
+const JUNCTIONS = {
+  tags: { relation: 'world_tags', column: 'tag', orderBy: 'j.added_at, j.id' },
+  flags: { relation: 'world_flags', column: 'flag', orderBy: 'j.flag' }
+} as const;
 
 interface WorldRow extends Record<string, unknown> {
   world_id: string;
@@ -201,126 +232,95 @@ export class WorldRepository {
     if (!record) {
       return undefined;
     }
-    return (await this.attachFlags(await this.attachTags([record])))[0];
+    const tagged = await this.attachJunction('tags', [record]);
+    return (await this.attachJunction('flags', tagged))[0];
   }
 
   /**
-   * Attach each record's tags from the world_tags junction, ordered by tag.
-   * Runs one batched query per distinct world_id instead of a per-row
-   * correlated subquery, so it works on both pg-mem and real Postgres.
+   * Attach each record's values from a junction table. Tags order by
+   * (added_at, id), flags by flag. Runs one batched query per distinct
+   * world_id instead of a per-row correlated subquery, so it works on both
+   * pg-mem and real Postgres.
    */
-  private async attachTags(records: WorldRecord[]): Promise<WorldRecord[]> {
+  private async attachJunction(
+    field: 'tags' | 'flags',
+    records: WorldRecord[]
+  ): Promise<WorldRecord[]> {
     if (records.length === 0) {
       return records;
     }
+    const { relation, column, orderBy } = JUNCTIONS[field];
     const worldIds = [...new Set(records.map((r) => r.worldId))];
     const placeholders = worldIds.map((_, i) => `$${i + 1}`).join(', ');
-    const result = await this.db.query<{
-      world_id: string;
-      tag: string;
-    }>(
-      `SELECT wt.world_id, wt.tag
-       FROM world_tags wt
-       WHERE wt.world_id IN (${placeholders})
-       ORDER BY wt.world_id, wt.added_at, wt.id`,
+    const result = await this.db.query<{ world_id: string; value: string }>(
+      `SELECT j.world_id, j.${column} AS value
+       FROM ${relation} j
+       WHERE j.world_id IN (${placeholders})
+       ORDER BY j.world_id, ${orderBy}`,
       worldIds
     );
     const byKey = new Map<string, string[]>();
     for (const row of result.rows) {
       const arr = byKey.get(row.world_id);
       if (arr) {
-        arr.push(row.tag);
+        arr.push(row.value);
       } else {
-        byKey.set(row.world_id, [row.tag]);
+        byKey.set(row.world_id, [row.value]);
       }
     }
     for (const record of records) {
-      record.tags = byKey.get(record.worldId) ?? [];
+      record[field] = byKey.get(record.worldId) ?? [];
     }
     return records;
   }
 
   /**
-   * Attach each record's flags from the world_flags junction, ordered by flag.
-   * Runs one batched query per distinct world_id instead of a per-row
-   * correlated subquery, so it works on both pg-mem and real Postgres.
+   * Remove a world record from the live table and archive it into
+   * deleted_world_records. Reports notFound when the delete affected no row.
    */
-  private async attachFlags(records: WorldRecord[]): Promise<WorldRecord[]> {
-    if (records.length === 0) {
-      return records;
-    }
-    const worldIds = [...new Set(records.map((r) => r.worldId))];
-    const placeholders = worldIds.map((_, i) => `$${i + 1}`).join(', ');
-    const result = await this.db.query<{
-      world_id: string;
-      flag: string;
-    }>(
-      `SELECT wf.world_id, wf.flag
-       FROM world_flags wf
-       WHERE wf.world_id IN (${placeholders})
-       ORDER BY wf.world_id, wf.flag`,
-      worldIds
-    );
-    const byKey = new Map<string, string[]>();
-    for (const row of result.rows) {
-      const arr = byKey.get(row.world_id);
-      if (arr) {
-        arr.push(row.flag);
-      } else {
-        byKey.set(row.world_id, [row.flag]);
-      }
-    }
-    for (const record of records) {
-      record.flags = byKey.get(record.worldId) ?? [];
-    }
-    return records;
-  }
-
-  /**
-   * Move a world record to the deleted_world_records archive table,
-   * then remove it from the live table. Returns true if a row existed.
-   */
-  async deleteByWorldId(worldId: string): Promise<boolean> {
-    const existing = await this.getByWorldId(worldId);
-    if (!existing) {
-      return false;
-    }
-
+  async deleteByWorldId(worldId: string): Promise<MutationResult> {
     const archiveSql = `
       INSERT INTO deleted_world_records
         (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, internal_add_date, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
     `;
-    const deleteSql = `DELETE FROM world_records WHERE world_id = $1`;
+    const deleteSql = `DELETE FROM world_records WHERE world_id = $1 RETURNING *`;
 
     const didDelete = await this.db.withTransaction(async (tx) => {
+      const tagsResult = await tx.query<{ tag: string }>(
+        `SELECT tag FROM world_tags WHERE world_id = $1 ORDER BY added_at, id`,
+        [worldId]
+      );
+      const result = await tx.query<WorldRow>(deleteSql, [worldId]);
+      if ((result.rowCount ?? 0) === 0) {
+        return false;
+      }
+      const row = result.rows[0];
       await tx.query(archiveSql, [
-        existing.worldId,
-        existing.guildId,
-        existing.messageId,
-        existing.name,
-        existing.authorName,
-        existing.capacity,
-        existing.platforms,
-        existing.tags,
-        existing.imageUrl,
-        existing.sourceContent,
-        existing.vrchatData,
-        existing.packageSizes,
-        existing.internalAddDate ?? null,
-        existing.createdAt ?? null,
-        existing.updatedAt ?? null
+        row.world_id,
+        row.guild_id,
+        row.message_id,
+        row.name,
+        row.author_name,
+        row.capacity,
+        row.platforms,
+        tagsResult.rows.map((r) => r.tag),
+        row.image_url,
+        row.source_content,
+        row.vrchat_data,
+        row.package_sizes,
+        row.internal_add_date ?? null,
+        row.created_at,
+        row.updated_at
       ]);
-      const result = await tx.query(deleteSql, [worldId]);
-      return (result.rowCount ?? 0) > 0;
+      return true;
     });
 
-    if (didDelete) {
-      logger.info(
-        `Archived world record ${worldId} into deleted_world_records`
-      );
+    if (!didDelete) {
+      return { status: 'notFound' };
     }
-    return didDelete;
+    logger.info(`Archived world record ${worldId} into deleted_world_records`);
+    return { status: 'ok' };
   }
 
   /**
@@ -331,17 +331,17 @@ export class WorldRepository {
   async updateQuality(
     worldId: string,
     quality: 'good' | 'bad' | null
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     if (existing.quality === quality) {
       logger.debug(
         `Skipping quality update for world ${worldId}: already "${quality}"`
       );
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     const result = await this.db.query(
@@ -354,7 +354,7 @@ export class WorldRepository {
     if (didUpdate) {
       logger.info(`Set quality to "${quality}" for world ${worldId}`);
     }
-    return didUpdate;
+    return { status: 'ok', updated: didUpdate };
   }
 
   /**
@@ -367,10 +367,10 @@ export class WorldRepository {
     tags: string[],
     sourceContent: string | null,
     addedByTokenId?: number
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     const tagsChanged = JSON.stringify(existing.tags) !== JSON.stringify(tags);
@@ -378,7 +378,7 @@ export class WorldRepository {
 
     if (!tagsChanged && !sourceChanged) {
       logger.debug(`Skipping tag update for world ${worldId}: no changes`);
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     await this.db.withTransaction(async (tx) => {
@@ -396,7 +396,7 @@ export class WorldRepository {
     });
 
     logger.info(`Updated tags for world ${worldId}: [${tags.join(', ')}]`);
-    return true;
+    return { status: 'ok', updated: true };
   }
 
   /**
@@ -407,17 +407,17 @@ export class WorldRepository {
     worldId: string,
     tags: string[],
     addedByTokenId?: number
-  ): Promise<boolean> {
+  ): Promise<MutationResult<{ updated: boolean }>> {
     const existing = await this.getByWorldId(worldId);
     if (!existing) {
-      return false;
+      return { status: 'notFound' };
     }
 
     if (JSON.stringify(existing.tags) === JSON.stringify(tags)) {
       logger.debug(
         `Skipping tag-only update for world ${worldId}: tags unchanged`
       );
-      return false;
+      return { status: 'ok', updated: false };
     }
 
     await this.db.withTransaction(async (tx) => {
@@ -431,7 +431,7 @@ export class WorldRepository {
     });
 
     logger.info(`Updated tags for world ${worldId}: [${tags.join(', ')}]`);
-    return true;
+    return { status: 'ok', updated: true };
   }
 
   /**
@@ -444,20 +444,10 @@ export class WorldRepository {
     return result.rows.map((r) => r.world_id);
   }
 
-  private buildWhereClause(filters?: {
-    tags?: string[];
-    excludeFlags?: string[];
-    flagMode?: 'include' | 'exclude';
-    platforms?: string[];
-    guildId?: string;
-    quality?: ('good' | 'bad')[];
-    search?: string;
-    minCapacity?: number;
-    maxCapacity?: number;
-    worldIds?: string[];
-    dayRange?: number;
-    highPriorityOnly?: boolean;
-  }): { whereClause: string; params: (string | number | string[])[] } {
+  private buildWhereClause(filters?: WorldFilters): {
+    whereClause: string;
+    params: (string | number | string[])[];
+  } {
     const whereParts: string[] = [];
     const params: (string | number | string[])[] = [];
 
@@ -475,7 +465,9 @@ export class WorldRepository {
       params.push(...filters.worldIds);
     }
 
-    if (filters?.quality && filters.quality.length > 0) {
+    if (filters?.qualityMode === 'exclude') {
+      whereParts.push('wr.quality IS NULL');
+    } else if (filters?.quality && filters.quality.length > 0) {
       const start = params.length;
       const placeholders = filters.quality
         .map((_, i) => `$${start + i + 1}`)
@@ -501,26 +493,24 @@ export class WorldRepository {
     }
 
     if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
-      if (filters?.excludeFlags && filters.excludeFlags.length > 0) {
-        const uniqueFlags = [...new Set(filters.excludeFlags)];
-        const start = params.length;
-        const placeholders = uniqueFlags
-          .map((_, i) => `$${start + i + 1}`)
-          .join(', ');
-        params.push(...uniqueFlags);
-        if (filters.flagMode === 'include') {
-          params.push(uniqueFlags.length);
-          // worlds whose flag rows cover every selected flag. COUNT(*) works
-          // because (world_id, flag) is the world_flags primary key, so
-          // duplicates cannot inflate the count.
-          whereParts.push(
-            `wr.world_id IN (SELECT s.world_id FROM (SELECT wf.world_id, COUNT(*) c FROM world_flags wf WHERE wf.flag IN (${placeholders}) GROUP BY wf.world_id) s WHERE s.c = $${start + uniqueFlags.length + 1})`
-          );
-        } else {
-          whereParts.push(
-            `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag IN (${placeholders}))`
-          );
-        }
+      const uniqueFlags = [...new Set(filters.excludeFlags)];
+      const start = params.length;
+      const placeholders = uniqueFlags
+        .map((_, i) => `$${start + i + 1}`)
+        .join(', ');
+      params.push(...uniqueFlags);
+      if (filters.flagMode === 'include') {
+        params.push(uniqueFlags.length);
+        // worlds whose flag rows cover every selected flag. COUNT(*) works
+        // because (world_id, flag) is the world_flags primary key, so
+        // duplicates cannot inflate the count.
+        whereParts.push(
+          `wr.world_id IN (SELECT s.world_id FROM (SELECT wf.world_id, COUNT(*) c FROM world_flags wf WHERE wf.flag IN (${placeholders}) GROUP BY wf.world_id) s WHERE s.c = $${start + uniqueFlags.length + 1})`
+        );
+      } else {
+        whereParts.push(
+          `wr.world_id NOT IN (SELECT wf.world_id FROM world_flags wf WHERE wf.flag IN (${placeholders}))`
+        );
       }
     }
 
@@ -572,6 +562,11 @@ export class WorldRepository {
       );
     }
 
+    const worldsPredicate = compileWorldsQuery(filters?.where, params);
+    if (worldsPredicate) {
+      whereParts.push(`(${worldsPredicate})`);
+    }
+
     const whereClause =
       whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
 
@@ -587,24 +582,11 @@ export class WorldRepository {
   async getAllPaginated(
     limit: number,
     offset: number,
-    filters?: {
-      tags?: string[];
-      excludeFlags?: string[];
-      flagMode?: 'include' | 'exclude';
-      platforms?: string[];
-      guildId?: string;
-      quality?: ('good' | 'bad')[];
-      search?: string;
-      minCapacity?: number;
-      maxCapacity?: number;
-      worldIds?: string[];
-      dayRange?: number;
-      highPriorityOnly?: boolean;
-      sortOrder?: 'asc' | 'desc';
-    }
+    filters?: WorldFilters
   ): Promise<{ rows: WorldRecord[]; total: number }> {
     const { whereClause, params } = this.buildWhereClause(filters);
     const orderDirection = filters?.sortOrder === 'asc' ? 'ASC' : 'DESC';
+    const orderExpression = resolveSortExpression(filters?.sortField);
 
     const countSql = `SELECT COUNT(*)::int as total FROM world_records wr ${whereClause}`;
     const selectSql = `
@@ -613,7 +595,7 @@ export class WorldRepository {
       LEFT JOIN high_priority_worlds hp
         ON hp.world_id = wr.world_id
       ${whereClause}
-      ORDER BY COALESCE(wr.internal_add_date, wr.created_at) ${orderDirection} LIMIT $${
+      ORDER BY ${orderExpression} ${orderDirection} LIMIT $${
         params.length + 1
       } OFFSET $${params.length + 2}
     `;
@@ -625,8 +607,9 @@ export class WorldRepository {
     const total = countResult.rows[0]?.total ?? 0;
 
     return {
-      rows: await this.attachFlags(
-        await this.attachTags(selectResult.rows.map(rowToRecord))
+      rows: await this.attachJunction(
+        'flags',
+        await this.attachJunction('tags', selectResult.rows.map(rowToRecord))
       ),
       total
     };
@@ -720,17 +703,6 @@ export class WorldRepository {
     );
     return result.rows[0]?.total ?? 0;
   }
-
-  /**
-   * The most recently processed world record.
-   */
-  async getLastProcessed(): Promise<WorldRecord | undefined> {
-    const result = await this.db.query<WorldRow>(
-      `SELECT * FROM world_records ORDER BY created_at DESC LIMIT 1`
-    );
-    const record = result.rows[0] ? rowToRecord(result.rows[0]) : undefined;
-    return record ? (await this.attachTags([record]))[0] : undefined;
-  }
 }
 
 // Singleton instance
@@ -741,9 +713,4 @@ export function getWorldRepository(): WorldRepository {
     repoInstance = new WorldRepository();
   }
   return repoInstance;
-}
-
-/** Reset the singleton (useful in tests). */
-export function resetWorldRepository(): void {
-  repoInstance = null;
 }

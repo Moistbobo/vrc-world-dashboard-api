@@ -16,6 +16,7 @@ export interface AddWorldRequest {
   content: string;
   messageTimestamp?: number;
   checkDuplicate?: boolean;
+  addedByTokenId?: number;
 }
 
 export type AddWorldResult =
@@ -109,7 +110,7 @@ export async function addWorld(req: AddWorldRequest): Promise<AddWorldResult> {
     packageSizes,
     req.messageTimestamp
   );
-  await repo.upsert(record);
+  await repo.upsert(record, req.addedByTokenId);
 
   return { status: 'created', world: record };
 }

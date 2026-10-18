@@ -7,7 +7,8 @@ const PERMISSIONS_HELP = [
   'worlds:write  Add, delete, and update world records',
   'tags:read     List all tags',
   'tags:write    Set tags on a world record',
-  'meta:read     Read dataset metadata counts'
+  'meta:read     Read dataset metadata counts',
+  'worlds:query  Run validated boolean queries over world records'
 ].join('\n');
 
 function parseArgs(args: string[]): Record<string, string> {

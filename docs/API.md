@@ -13,8 +13,8 @@ direct database writes.
 http://<host>:<port>
 ```
 
-| Setting | Default | Env Variable |
-|---------|---------|--------------|
+| Setting | Default   | Env Variable |
+| ------- | --------- | ------------ |
 | Host    | `0.0.0.0` | `API_HOST`   |
 | Port    | `3000`    | `API_PORT`   |
 
@@ -57,11 +57,15 @@ pnpm token:revoke -- --name bot
 Roles own permissions. Changing a role applies immediately to every token
 holding it, without re-provisioning tokens.
 
-| Role | Permissions |
-|------|-------------|
-| `viewer` | `worlds:read`, `tags:read`, `meta:read` |
-| `curator` | viewer permissions plus `worlds:write`, `tags:write` |
-| `admin` | same as curator today; token generation is planned future work |
+| Role      | Permissions                                                    |
+| --------- | -------------------------------------------------------------- |
+| `viewer`  | `worlds:read`, `tags:read`, `meta:read`                        |
+| `curator` | viewer permissions plus `worlds:write`, `tags:write`           |
+| `admin`   | same as curator today; token generation is planned future work |
+| `bot`     | `worlds:read`, `tags:read`, `meta:read`, `worlds:query`        |
+
+The `bot` role is read-only and cannot mutate records; it exists so an
+automation token can run the query DSL without holding `worlds:write`.
 
 The seed roles are created automatically by the database migration. Custom
 roles can be defined:
@@ -79,13 +83,14 @@ pnpm role:update -- --name curator-v2 --add meta:read --remove tags:read
 
 ### Permissions
 
-| Permission | Routes |
-|------------|--------|
-| `worlds:read` | `GET /api/worlds`, `GET /api/worlds/search`, `GET /api/worlds/ids`, `GET /api/worlds/:worldId`, `POST /api/worlds/extract` |
+| Permission     | Routes                                                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `worlds:read`  | `GET /api/worlds`, `GET /api/worlds/search`, `GET /api/worlds/ids`, `GET /api/worlds/:worldId`, `POST /api/worlds/extract`                                                                                    |
 | `worlds:write` | `POST /api/worlds`, `DELETE /api/worlds/:worldId`, `PUT /api/worlds/:worldId/quality`, `PUT /api/worlds/:worldId/tags`, `PUT /api/worlds/:worldId/high-priority`, `DELETE /api/worlds/:worldId/high-priority` |
-| `tags:read` | `GET /api/tags` |
-| `tags:write` | `PUT /api/worlds/:worldId/tags/edit` |
-| `meta:read` | `GET /api/meta` |
+| `tags:read`    | `GET /api/tags`                                                                                                                                                                                               |
+| `tags:write`   | `PUT /api/worlds/:worldId/tags/edit`                                                                                                                                                                          |
+| `meta:read`    | `GET /api/meta`                                                                                                                                                                                               |
+| `worlds:query` | `POST /api/worlds/query`                                                                                                                                                                                      |
 
 `GET /api/me` requires no specific permission — any valid token can read its own
 identity.
@@ -97,10 +102,10 @@ identity.
 You can lock down the API so only specific browser origins and/or source IP
 addresses can reach it. Configure these via environment variables:
 
-| Variable | Description |
-|----------|-------------|
-| `API_ALLOWED_ORIGINS` | Comma-separated list of allowed `Origin` values. Used for CORS preflight and origin header validation. Supports `*` wildcards. Example: `https://sosd.googoogaagaa.club,https://testnet.googoogaagaa.club`. |
-| `API_ALLOWED_IPS` | Comma-separated list of allowed source IP addresses. Example: `203.0.113.42,127.0.0.1`. When set, the API trusts loopback reverse proxies (e.g. Caddy or Nginx on the same host) to provide the real client IP via `X-Forwarded-For`. |
+| Variable              | Description                                                                                                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `API_ALLOWED_ORIGINS` | Comma-separated list of allowed `Origin` values. Used for CORS preflight and origin header validation. Supports `*` wildcards. Example: `https://sosd.googoogaagaa.club,https://testnet.googoogaagaa.club`.                           |
+| `API_ALLOWED_IPS`     | Comma-separated list of allowed source IP addresses. Example: `203.0.113.42,127.0.0.1`. When set, the API trusts loopback reverse proxies (e.g. Caddy or Nginx on the same host) to provide the real client IP via `X-Forwarded-For`. |
 
 A request to any endpoint except `/api/health` must satisfy **at least one**
 configured restriction in addition to presenting a valid token:
@@ -147,21 +152,24 @@ Returns a paginated, filterable list of world records.
 
 **Query parameters**
 
-| Parameter     | Type              | Default | Max | Description |
-|---------------|-------------------|---------|-----|-------------|
-| `limit`       | number            | `50`    | 500 | Number of records to return. |
-| `offset`      | number            | `0`     | —   | Number of records to skip (for pagination). |
-| `tag`         | string / string[] | —       | —   | Filter by tag(s). Comma-separated or repeated. Multiple values use AND logic. |
-| `exclude`     | string / string[] | —       | —   | Filter by flag(s). Comma-separated or repeated. With the default `flagMode=exclude`, hides worlds carrying any of the flags; with `flagMode=include`, returns only worlds carrying all of the flags (same AND logic as `tag`). Available to all `worlds:read` tokens. |
-| `flagMode`    | string            | `exclude` | — | How to interpret the `exclude` flag list. `exclude` (default) hides worlds carrying the flags; `include` returns only worlds carrying all of them, matching the `tag` filter's behavior. Unrecognized values fall back to `exclude`. Only applies when `exclude` is provided. |
-| `platform`    | string / string[] | —       | —   | Filter by supported platform(s). Comma-separated or repeated. Multiple values use AND logic. |
-| `quality`     | string / string[] | —       | —   | Filter by quality. Values: `good`, `bad`. |
-| `search`      | string            | —       | —   | Search across name, author, source content, world id, and tags. |
-| `minCapacity` | integer           | —       | —   | Minimum world capacity (inclusive). Must be ≥ 1 and ≤ 80. |
-| `maxCapacity` | integer           | —       | —   | Maximum world capacity (inclusive). Must be ≥ 1 and ≤ 80. |
-| `worldId`     | string / string[] | —       | —   | Filter to specific world ID(s). Comma-separated or repeated. Exact match only. |
-| `dayRange`    | integer           | —       | 365 | Return only worlds tagged within the last N days. Values below `0` are treated as `0` (no filter); values above `365` are clamped to `365`. Tagged date uses `internal_add_date` when present, otherwise falls back to `created_at`. |
-| `highPriority` | boolean           | —       | —   | When `true`, return only high-priority worlds. Requires `worlds:write`; viewer tokens get `403 Forbidden`. |
+| Parameter      | Type              | Default   | Max | Description                                                                                                                                                                                                                                                                   |
+| -------------- | ----------------- | --------- | --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `limit`        | integer           | `50`      | 999 | Number of records to return. Must be between 1 and 999; out-of-range or non-integer values return `400 Bad Request`.                                                                                                                                                          |
+| `offset`       | integer           | `0`       | —   | Number of records to skip (for pagination). Must be ≥ 0; invalid values return `400 Bad Request`.                                                                                                                                                                             |
+| `tag`          | string / string[] | —         | —   | Filter by tag(s). Comma-separated or repeated. Multiple values use AND logic.                                                                                                                                                                                                 |
+| `exclude`      | string / string[] | —         | —   | Filter by flag(s). Comma-separated or repeated. With the default `flagMode=exclude`, hides worlds carrying any of the flags; with `flagMode=include`, returns only worlds carrying all of the flags (same AND logic as `tag`). Available to all `worlds:read` tokens.         |
+| `flagMode`     | string            | `exclude` | —   | How to interpret the `exclude` flag list. `exclude` (default) hides worlds carrying the flags; `include` returns only worlds carrying all of them, matching the `tag` filter's behavior. Unrecognized values fall back to `exclude`. Only applies when `exclude` is provided. |
+| `platform`     | string / string[] | —         | —   | Filter by supported platform(s). Comma-separated or repeated. Multiple values use AND logic.                                                                                                                                                                                  |
+| `quality`      | string / string[] | —         | —   | Filter by quality. Values: `good`, `bad`.                                                                                                                                                                                                                                     |
+| `qualityMode`  | string / string[] | —         | —   | When `exclude` (comma-separated or repeated), return only worlds with no quality set (unrated); takes precedence over `quality`. Any other value falls back to normal behavior.                                                                                               |
+| `search`       | string            | —         | —   | Search across name, author, source content, world id, and tags.                                                                                                                                                                                                               |
+| `minCapacity`  | integer           | —         | —   | Minimum world capacity (inclusive). Must be ≥ 1 and ≤ 80.                                                                                                                                                                                                                     |
+| `maxCapacity`  | integer           | —         | —   | Maximum world capacity (inclusive). Must be ≥ 1 and ≤ 80.                                                                                                                                                                                                                     |
+| `worldId`      | string / string[] | —         | —   | Filter to specific world ID(s). Comma-separated or repeated. Exact match only.                                                                                                                                                                                                |
+| `dayRange`     | integer           | —         | 365 | Return only worlds tagged within the last N days. Values below `0` are treated as `0` (no filter); values above `365` are clamped to `365`. Tagged date uses `internal_add_date` when present, otherwise falls back to `created_at`.                                          |
+| `highPriority` | boolean           | —         | —   | When `true`, return only high-priority worlds. Requires `worlds:write`; viewer tokens get `403 Forbidden`.                                                                                                                                                                    |
+| `where`        | string            | —         | —   | A base64url-encoded query DSL tree (see [Query Worlds](#19-query-worlds)). Combined with the flat filters above using AND logic. Invalid trees return `400 Bad Request`.                                                                                                      |
+| `sortField`    | string            | `addedAt` | —   | Sort column. One of `addedAt` (tagged date), `createdAt`, `updatedAt`, `capacity`, `name`, `author`, `quality`. Unknown values are ignored. Use `order` for direction. |
 
 **Response**
 
@@ -200,6 +208,7 @@ GET /api/worlds?minCapacity=10&maxCapacity=40&quality=good&tag=horror&platform=a
 GET /api/worlds?dayRange=7&tag=horror&quality=good
 GET /api/worlds?exclude=furry&exclude=AI slop
 GET /api/worlds?exclude=furry&exclude=AI slop&flagMode=include
+GET /api/worlds?qualityMode=exclude&tag=chill
 ```
 
 ---
@@ -216,8 +225,8 @@ world name (e.g. Twitter/X posts without a direct world link).
 
 **Query parameter**
 
-| Parameter | Type   | Required | Description |
-|-----------|--------|----------|-------------|
+| Parameter | Type   | Required | Description               |
+| --------- | ------ | -------- | ------------------------- |
 | `name`    | string | yes      | World name to search for. |
 
 **Response**
@@ -239,10 +248,10 @@ world name (e.g. Twitter/X posts without a direct world link).
 
 **Errors**
 
-| Status | Body |
-|--------|------|
-| `400`  | `{ "error": "name query parameter is required" }` |
-| `401`  | `{ "error": "Unauthorized" }` |
+| Status | Body                                               |
+| ------ | -------------------------------------------------- |
+| `400`  | `{ "error": "name query parameter is required" }`  |
+| `401`  | `{ "error": "Unauthorized" }`                      |
 | `502`  | `{ "error": "Failed to search worlds on VRChat" }` |
 
 ---
@@ -260,8 +269,8 @@ field is present for all tokens.
 
 **Path parameter**
 
-| Parameter | Type   | Description |
-|-----------|--------|-------------|
+| Parameter | Type   | Description                               |
+| --------- | ------ | ----------------------------------------- |
 | `worldId` | string | The VRChat world ID (e.g. `wrld_abc123`). |
 
 **Error response** (world not found)
@@ -382,23 +391,33 @@ submitting guild.
 }
 ```
 
-| Field              | Type     | Required | Description |
-|--------------------|----------|----------|-------------|
-| `worldId`          | string   | yes      | VRChat world ID, must match `wrld_` + 36 hex chars. |
-| `guildId`          | string   | yes      | Discord guild ID submitting the world. Stored as provenance. |
-| `messageId`        | string   | yes      | Discord message ID (snowflake). Used as the duplicate-response link and to derive `internalAddDate` when `messageTimestamp` is absent. |
-| `content`          | string   | yes      | The entire Discord message text. Tag extraction source. |
-| `messageTimestamp` | number   | no       | Unix seconds. Stored as `internalAddDate` when provided; otherwise derived from the snowflake. |
-| `checkDuplicate`   | boolean  | no       | Default `true`. Set `false` to force a refetch/upsert (the bot's force-refetch flow). |
+| Field              | Type    | Required | Description                                                                                                                            |
+| ------------------ | ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `worldId`          | string  | yes      | VRChat world ID, must match `wrld_` + 36 hex chars.                                                                                    |
+| `guildId`          | string  | yes      | Discord guild ID submitting the world. Stored as provenance.                                                                           |
+| `messageId`        | string  | yes      | Discord message ID (snowflake). Used as the duplicate-response link and to derive `internalAddDate` when `messageTimestamp` is absent. |
+| `content`          | string  | yes      | The entire Discord message text. Tag extraction source.                                                                                |
+| `messageTimestamp` | number  | no       | Unix seconds. Stored as `internalAddDate` when provided; otherwise derived from the snowflake.                                         |
+| `checkDuplicate`   | boolean | no       | Default `true`. Set `false` to force a refetch/upsert (the bot's force-refetch flow).                                                  |
 
 **New world** — status `201`:
 
 ```json
 {
   "duplicate": false,
-  "world": { "...": "sanitized world object (same shape as GET responses)" }
+  "world": {
+    "...": "full stored world record, not sanitized",
+    "messageId": "1250000000000000000",
+    "sourceContent": "https://vrchat.com/home/world/wrld_abc123 Tags: horror, game",
+    "vrchatData": "{ ... raw VRChat API payload ... }"
+  }
 }
 ```
+
+The `world` object is the full stored record, including the internal fields
+`messageId`, `sourceContent`, and `vrchatData`. This response is the one
+exception to the stripping rule below, so the submitting bot client receives
+these fields even though other responses omit them.
 
 **Duplicate** — status `200`:
 
@@ -410,16 +429,20 @@ submitting guild.
 }
 ```
 
+The `200` response is asymmetric to `201`. It returns the sanitized existing
+world object, not the full record, plus `existingMessageId` so the bot can link
+to the original message.
+
 The bot replies to the new message with a link to the original message built
 from `existingMessageId` and the channel.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
+| Status | Body                                                                             |
+| ------ | -------------------------------------------------------------------------------- |
 | `400`  | `{ "error": "Invalid body. Expected { worldId, guildId, messageId, content }" }` |
-| `401`  | `{ "error": "Unauthorized" }` |
-| `502`  | `{ "error": "Failed to fetch world data from VRChat" }` |
+| `401`  | `{ "error": "Unauthorized" }`                                                    |
+| `502`  | `{ "error": "Failed to fetch world data from VRChat" }`                          |
 
 ---
 
@@ -447,17 +470,20 @@ API; the bot just forwards message content.
 ```json
 {
   "worlds": [
-    { "worldId": "wrld_abc123", "sourceContent": "https://x.com/someuser/status/123" }
+    {
+      "worldId": "wrld_abc123",
+      "sourceContent": "https://x.com/someuser/status/123"
+    }
   ]
 }
 ```
 
 **Errors**
 
-| Status | Body |
-|--------|------|
-| `400`  | `{ "error": "Invalid body. Expected { content }" }` |
-| `401`  | `{ "error": "Unauthorized" }` |
+| Status | Body                                                   |
+| ------ | ------------------------------------------------------ |
+| `400`  | `{ "error": "Invalid body. Expected { content }" }`    |
+| `401`  | `{ "error": "Unauthorized" }`                          |
 | `502`  | `{ "error": "Failed to extract worlds from content" }` |
 
 ---
@@ -482,9 +508,9 @@ may be empty; a `guildId` sent in the body is accepted and ignored.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
-| `401`  | `{ "error": "Unauthorized" }` |
+| Status | Body                             |
+| ------ | -------------------------------- |
+| `401`  | `{ "error": "Unauthorized" }`    |
 | `404`  | `{ "error": "World not found" }` |
 
 ---
@@ -508,10 +534,10 @@ the quality is unchanged. A `guildId` in the body is accepted and ignored.
 }
 ```
 
-| Field      | Type                      | Required | Description |
-|------------|---------------------------|----------|-------------|
-| `quality`  | `"good"` \| `"bad"` \| null | yes      | Rating to set; `null` clears it. |
-| `guildId`  | string                    | no       | Deprecated. Accepted and ignored. |
+| Field     | Type                        | Required | Description                       |
+| --------- | --------------------------- | -------- | --------------------------------- |
+| `quality` | `"good"` \| `"bad"` \| null | yes      | Rating to set; `null` clears it.  |
+| `guildId` | string                      | no       | Deprecated. Accepted and ignored. |
 
 **Success** — status `200`:
 
@@ -523,11 +549,11 @@ the quality is unchanged. A `guildId` in the body is accepted and ignored.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
+| Status | Body                                                |
+| ------ | --------------------------------------------------- |
 | `400`  | `{ "error": "Invalid body. Expected { quality }" }` |
-| `401`  | `{ "error": "Unauthorized" }` |
-| `404`  | `{ "error": "World not found" }` |
+| `401`  | `{ "error": "Unauthorized" }`                       |
+| `404`  | `{ "error": "World not found" }`                    |
 
 ---
 
@@ -573,11 +599,11 @@ deprecated: accepted and ignored.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
+| Status | Body                                                      |
+| ------ | --------------------------------------------------------- |
 | `400`  | `{ "error": "Invalid body. Expected { sourceContent }" }` |
-| `401`  | `{ "error": "Unauthorized" }` |
-| `404`  | `{ "error": "World not found" }` |
+| `401`  | `{ "error": "Unauthorized" }`                             |
+| `404`  | `{ "error": "World not found" }`                          |
 
 ---
 
@@ -602,8 +628,8 @@ valid token (including `viewer`) can read its own identity.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
+| Status | Body                          |
+| ------ | ----------------------------- |
 | `401`  | `{ "error": "Unauthorized" }` |
 
 ---
@@ -635,10 +661,10 @@ ignored.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
-| `401`  | `{ "error": "Unauthorized" }` |
-| `403`  | `{ "error": "Forbidden" }` |
+| Status | Body                             |
+| ------ | -------------------------------- |
+| `401`  | `{ "error": "Unauthorized" }`    |
+| `403`  | `{ "error": "Forbidden" }`       |
 | `404`  | `{ "error": "World not found" }` |
 
 ---
@@ -670,10 +696,10 @@ ignored.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
-| `401`  | `{ "error": "Unauthorized" }` |
-| `403`  | `{ "error": "Forbidden" }` |
+| Status | Body                             |
+| ------ | -------------------------------- |
+| `401`  | `{ "error": "Unauthorized" }`    |
+| `403`  | `{ "error": "Forbidden" }`       |
 | `404`  | `{ "error": "World not found" }` |
 
 ---
@@ -717,13 +743,13 @@ world's tags. No-op when the tags are unchanged.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
+| Status | Body                                             |
+| ------ | ------------------------------------------------ |
 | `400`  | `{ "error": "Invalid body. Expected { tags }" }` |
-| `400`  | `{ "error": "Invalid tags: <unknown tags>" }` |
-| `401`  | `{ "error": "Unauthorized" }` |
-| `403`  | `{ "error": "Forbidden" }` |
-| `404`  | `{ "error": "World not found" }` |
+| `400`  | `{ "error": "Invalid tags: <unknown tags>" }`    |
+| `401`  | `{ "error": "Unauthorized" }`                    |
+| `403`  | `{ "error": "Forbidden" }`                       |
+| `404`  | `{ "error": "World not found" }`                 |
 
 ---
 
@@ -766,13 +792,13 @@ flags. No-op when the flag set is unchanged.
 
 **Errors**
 
-| Status | Body |
-|--------|------|
+| Status | Body                                              |
+| ------ | ------------------------------------------------- |
 | `400`  | `{ "error": "Invalid body. Expected { flags }" }` |
-| `400`  | `{ "error": "Invalid flags: <unknown flags>" }` |
-| `401`  | `{ "error": "Unauthorized" }` |
-| `403`  | `{ "error": "Forbidden" }` |
-| `404`  | `{ "error": "World not found" }` |
+| `400`  | `{ "error": "Invalid flags: <unknown flags>" }`   |
+| `401`  | `{ "error": "Unauthorized" }`                     |
+| `403`  | `{ "error": "Forbidden" }`                        |
+| `404`  | `{ "error": "World not found" }`                  |
 
 ---
 
@@ -804,10 +830,147 @@ Requires the `tags:read` permission (same gate as `GET /api/tags`).
 
 **Errors**
 
-| Status | Body |
-|--------|------|
+| Status | Body                          |
+| ------ | ----------------------------- |
 | `401`  | `{ "error": "Unauthorized" }` |
-| `403`  | `{ "error": "Forbidden" }` |
+| `403`  | `{ "error": "Forbidden" }`    |
+
+---
+
+### 19. Query Worlds
+
+```
+POST /api/worlds/query
+```
+
+Requires the `worlds:query` permission. Evaluates a validated boolean query
+tree over world records. The same tree can be sent to `GET /api/worlds` as a
+base64url-encoded `where` parameter (see
+[List Worlds](#2-list-worlds)), which requires only `worlds:read`.
+
+**Request body**
+
+```json
+{
+  "query": {
+    "groups": [
+      {
+        "connector": "or",
+        "conditions": [{ "field": "tag", "op": "has", "value": "kino" }]
+      },
+      {
+        "connector": "or",
+        "conditions": [{ "field": "tag", "op": "has", "value": "horror" }]
+      }
+    ]
+  },
+  "sortField": "capacity",
+  "sortDir": "asc",
+  "limit": 50,
+  "offset": 0
+}
+```
+
+| Field       | Type    | Default   | Description                                                                                                                              |
+| ----------- | ------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `query`     | object  | required  | The query tree. Must be an object or the request returns `400 Bad Request`.                                                              |
+| `sortField` | string  | `addedAt` | One of `addedAt`, `createdAt`, `updatedAt`, `capacity`, `name`, `author`, `quality`. Any other value returns `400 Bad Request`.            |
+| `sortDir`   | string  | `desc`    | `asc` or `desc`. Any other value returns `400 Bad Request`.                                                                              |
+| `limit`     | integer | `50`      | Clamped to at most `500` (`1000` becomes `500`). A non-integer or non-positive value returns `400 Bad Request`.                          |
+| `offset`    | integer | `0`       | Must be ≥ 0; a non-integer or negative value returns `400 Bad Request`.                                                                  |
+
+**Response**
+
+Same shape as `GET /api/worlds`: `{ "total", "limit", "offset", "worlds" }`.
+`quality`, `highPriority`, and `guildId` are present only for tokens with
+`worlds:write`.
+
+**Grammar**
+
+```text
+{ "groups": [ { "connector": "and" | "or", "conditions": [ condition, ... ] }, ... ] }
+```
+
+The top level ORs the groups. A group joins its conditions with AND or OR per
+its `connector`. A group with no conditions is dropped; a tree with no
+conditions runs unfiltered.
+
+A condition is `{ "field", "op", "value"?, "value2"?, "values"?, "negate"? }`.
+
+| Field                              | Operators                                            | Notes                                                                                                                                                  |
+| ---------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`, `author`, `worldId`, `source` | `eq`, `ne`, `in`, `contains`, `prefix`, `not_contains`, `script` | `contains` and `prefix` are case-insensitive. `script` takes a named pattern: `latin`, `cyrillic`, `greek`, `cjk`, `japanese`, `korean`, or `arabic`. |
+| `capacity`                         | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `between`, `in` | Integers from 1 to 80. `between` requires `value <= value2`.                                                                                            |
+| `addedAt`, `createdAt`, `updatedAt` | `before`, `after`, `between`                          | ISO 8601 date strings. An unparseable date or a reversed `between` returns `400 Bad Request`. `addedAt` uses `internal_add_date` with a `created_at` fallback. |
+| `platform`                         | `has`, `hasAny`, `hasAll`, `not_has`                  | `has`/`not_has` take `value`; `hasAny`/`hasAll` take `values`.                                                                                          |
+| `tag`, `flag`                      | `has`, `hasAny`, `hasAll`, `not_has`                  | Same value shapes as `platform`. An unknown tag or flag value is bound as a string and matches nothing.                                                 |
+| `quality`                          | `eq`, `ne`, `isNull`                                  | `value` is `good`, `bad`, or `null`.                                                                                                                    |
+| `highPriority`                     | `eq`                                                  | `value` is `true` or `false`.                                                                                                                          |
+
+`negate: true` inverts a condition. Negative operators (`ne`, `not_contains`,
+`not_has`) combined with `negate` normalize to their positive form.
+
+**Caps**
+
+| Cap                          | Limit |
+| ---------------------------- | ----- |
+| Groups                       | 8     |
+| Conditions per group         | 8     |
+| Total conditions             | 64    |
+| Values per condition         | 20    |
+| Characters per value         | 200   |
+
+Any violation returns `400 Bad Request` with a message naming the offending
+field and operator.
+
+Every value is bound as a query parameter, so a value such as
+`'; DROP TABLE world_records; --` is treated as data and cannot execute SQL.
+
+**GET `where` parameter**
+
+The `where` parameter is the base64url (RFC 4648 §5, `-` and `_`, no padding)
+encoding of the UTF-8 JSON tree. Passing the same tree to `GET /api/worlds`
+and to the POST yields the same result set.
+
+```text
+GET /api/worlds?where=eyJncm91cHMiOlt7ImNvbm5lY3RvciI6Im9yIiwiY29uZGl0aW9ucyI6W3siZmllbGQiOiJ0YWciLCJvcCI6ImhhcyIsInZhbHVlIjoia2lubyJ9XX1dfQ
+```
+
+**Errors**
+
+| Status | Body                              | Cause                                                                            |
+| ------ | --------------------------------- | -------------------------------------------------------------------------------- |
+| `400`  | `{ "error": "<message>" }`        | Malformed tree, unknown field or operator, out-of-range value, or bad pagination. |
+| `403`  | `{ "error": "Forbidden" }`        | Token lacks `worlds:query`.                                                       |
+| `429`  | `{ "error": "Too many requests" }`| Token exceeded its query rate limit. Response carries a `Retry-After` header.     |
+
+**Rate limiting**
+
+`POST /api/worlds/query` is rate limited per token with a fixed window. The
+limiter keys on the token id, so one token cannot exhaust another token's
+budget. A denied request returns `429` with a `Retry-After` header holding the
+whole seconds until the window resets, and runs no SQL. Only this endpoint is
+rate limited; `GET /api/worlds` and the mutation routes are unaffected.
+
+| Env var                      | Default | Description                                                        |
+| ---------------------------- | ------- | ------------------------------------------------------------------ |
+| `WORLDS_QUERY_RATE_LIMIT`    | `120`   | Requests allowed per token per window. `0` or negative disables the limiter. |
+| `WORLDS_QUERY_RATE_WINDOW_MS`| `60000` | Fixed window length in milliseconds.                               |
+
+**Audit log**
+
+Every accepted query emits one structured log entry at `info` with the message
+`worlds query executed` and these fields. The query values, world names, and
+source text are never logged.
+
+| Field         | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `event`       | Always `worlds_query`.                                    |
+| `role`        | Name of the token's role.                                 |
+| `groups`      | Number of groups in the query tree.                       |
+| `conditions`  | Total conditions across all groups.                       |
+| `duration_ms` | Handler duration in milliseconds.                         |
+| `total`       | Total rows the query matched.                             |
 
 ---
 
@@ -815,38 +978,39 @@ Requires the `tags:read` permission (same gate as `GET /api/tags`).
 
 Each world object returned by the API has the following fields:
 
-| Field             | Type                     | Description |
-|-------------------|--------------------------|-------------|
-| `worldId`         | string                   | VRChat world ID (e.g. `wrld_abc123`). |
-| `name`            | string \| null           | Display name of the world. |
-| `authorName`      | string \| null           | Name of the author / creator. |
-| `capacity`        | number \| null           | Maximum player capacity. |
-| `platforms`       | string[]                 | Supported platforms (`android`, `standalonewindows`, etc.). |
-| `packageSizes`    | (number \| null)[]       | Download size in MB per platform, aligned 1:1 with `platforms`. `null` when the size could not be determined. |
-| `tags`            | string[]                 | Tags applied to this world record. |
-| `flags`           | string[]                 | Flags applied to this world (empty array when none). Visible to all tokens. |
-| `imageUrl`        | string \| null           | Thumbnail image URL from VRChat API. |
-| `vrchatUrl`       | string                   | Link to the world on the VRChat website. |
-| `quality`         | `"good"` \| `"bad"` \| null | Manual quality rating (if set). Present only for tokens with `worlds:write`. |
-| `highPriority`    | boolean                 | Whether the world is on the high-priority list. Present only for tokens with `worlds:write`. |
-| `guildId`         | string                   | Discord guild that last submitted or updated the world. Present only for tokens with `worlds:write`. |
-| `createdAt`       | string \| undefined      | ISO 8601 timestamp of when the record was created. |
-| `internalAddDate` | string \| null           | ISO 8601 timestamp of when the world was originally tagged, if known. |
+| Field             | Type                        | Description                                                                                                   |
+| ----------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `worldId`         | string                      | VRChat world ID (e.g. `wrld_abc123`).                                                                         |
+| `name`            | string \| null              | Display name of the world.                                                                                    |
+| `authorName`      | string \| null              | Name of the author / creator.                                                                                 |
+| `capacity`        | number \| null              | Maximum player capacity.                                                                                      |
+| `platforms`       | string[]                    | Supported platforms (`android`, `standalonewindows`, etc.).                                                   |
+| `packageSizes`    | (number \| null)[]          | Download size in MB per platform, aligned 1:1 with `platforms`. `null` when the size could not be determined. |
+| `tags`            | string[]                    | Tags applied to this world record.                                                                            |
+| `flags`           | string[]                    | Flags applied to this world (empty array when none). Visible to all tokens.                                   |
+| `imageUrl`        | string \| null              | Thumbnail image URL from VRChat API.                                                                          |
+| `vrchatUrl`       | string                      | Link to the world on the VRChat website.                                                                      |
+| `quality`         | `"good"` \| `"bad"` \| null | Manual quality rating (if set). Present only for tokens with `worlds:write`.                                  |
+| `highPriority`    | boolean                     | Whether the world is on the high-priority list. Present only for tokens with `worlds:write`.                  |
+| `guildId`         | string                      | Discord guild that last submitted or updated the world. Present only for tokens with `worlds:write`.          |
+| `createdAt`       | string \| undefined         | ISO 8601 timestamp of when the record was created.                                                            |
+| `internalAddDate` | string \| null              | ISO 8601 timestamp of when the world was originally tagged, if known.                                         |
 
 Internal fields such as `messageId`, `sourceContent`, and `vrchatData` are
-intentionally stripped from API responses.
+intentionally stripped from GET, list, and detail responses. `POST /api/worlds`
+is the exception: its `201` create response returns the full stored record.
 
 ---
 
 ## Error Responses
 
-| Status Code | Meaning                  | Body |
-|-------------|--------------------------|------|
-| `400`       | Invalid query params / body | `{ "error": "..." }` |
-| `401`       | Missing / invalid / revoked token | `{ "error": "Unauthorized" }` |
-| `403`       | Disallowed origin or IP, or token lacks the required permission | `{ "error": "Forbidden" }` |
-| `404`       | World not found / route  | `{ "error": "World not found" }` / `{ "error": "Not Found" }` |
-| `502`       | VRChat fetch failure     | `{ "error": "Failed to fetch world data from VRChat" }` |
+| Status Code | Meaning                                                         | Body                                                          |
+| ----------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| `400`       | Invalid query params / body                                     | `{ "error": "..." }`                                          |
+| `401`       | Missing / invalid / revoked token                               | `{ "error": "Unauthorized" }`                                 |
+| `403`       | Disallowed origin or IP, or token lacks the required permission | `{ "error": "Forbidden" }`                                    |
+| `404`       | World not found / route                                         | `{ "error": "World not found" }` / `{ "error": "Not Found" }` |
+| `502`       | VRChat fetch failure                                            | `{ "error": "Failed to fetch world data from VRChat" }`       |
 
 ---
 

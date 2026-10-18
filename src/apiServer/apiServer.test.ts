@@ -300,17 +300,95 @@ describe('API Server', () => {
       );
     });
 
-    it('caps limit at 500', async () => {
+    it('returns 400 when limit exceeds the maximum', async () => {
+      const response = await request(app)
+        .get('/api/worlds?limit=9999')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'limit must be at most 999' });
+    });
+
+    it('returns 400 for a non-integer limit', async () => {
+      const response = await request(app)
+        .get('/api/worlds?limit=abc')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'limit must be an integer' });
+    });
+
+    it('returns 400 for a negative limit', async () => {
+      const response = await request(app)
+        .get('/api/worlds?limit=-5')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'limit must be at least 1' });
+    });
+
+    it('returns 400 for a limit of zero', async () => {
+      const response = await request(app)
+        .get('/api/worlds?limit=0')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'limit must be at least 1' });
+    });
+
+    it('returns 400 for a limit of 1000', async () => {
+      const response = await request(app)
+        .get('/api/worlds?limit=1000')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'limit must be at most 999' });
+    });
+
+    it('returns 400 for a non-integer offset', async () => {
+      const response = await request(app)
+        .get('/api/worlds?offset=abc')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'offset must be an integer' });
+    });
+
+    it('returns 400 for a negative offset', async () => {
+      const response = await request(app)
+        .get('/api/worlds?offset=-1')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: 'offset must be at least 0' });
+    });
+
+    it('passes a valid limit and offset to the repository', async () => {
       const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
       asMock(getWorldRepository).mockReturnValue(
         createMockRepo({ getAllPaginated })
       );
 
-      await request(app)
-        .get('/api/worlds?limit=9999')
+      const response = await request(app)
+        .get('/api/worlds?limit=999&offset=0')
         .set('authorization', 'Bearer test-token');
 
-      expect(getAllPaginated).toHaveBeenCalledWith(500, 0, undefined);
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(999, 0, undefined);
+    });
+
+    it('passes a large offset to the repository', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?offset=100000')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(50, 100000, undefined);
     });
 
     it('returns 400 when minCapacity is greater than maxCapacity', async () => {
@@ -446,6 +524,112 @@ describe('API Server', () => {
         50,
         0,
         expect.not.objectContaining({ flagMode: 'include' })
+      );
+    });
+
+    it('passes qualityMode=exclude to repository and is allowed for viewer tokens', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?qualityMode=exclude')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({ qualityMode: 'exclude' })
+      );
+    });
+
+    it('omits qualityMode when absent', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      await request(app)
+        .get('/api/worlds')
+        .set('authorization', 'Bearer test-token');
+
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.not.objectContaining({ qualityMode: 'exclude' })
+      );
+    });
+
+    it('treats unrecognized qualityMode values as absent', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?qualityMode=bogus')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.not.objectContaining({ qualityMode: 'exclude' })
+      );
+    });
+
+    it('honors exclude within repeated and comma-separated qualityMode values', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+
+      await request(app)
+        .get('/api/worlds?qualityMode=exclude&qualityMode=exclude')
+        .set('authorization', 'Bearer test-token');
+      expect(getAllPaginated).toHaveBeenLastCalledWith(
+        50,
+        0,
+        expect.objectContaining({ qualityMode: 'exclude' })
+      );
+
+      await request(app)
+        .get('/api/worlds?qualityMode=include,exclude')
+        .set('authorization', 'Bearer test-token');
+      expect(getAllPaginated).toHaveBeenLastCalledWith(
+        50,
+        0,
+        expect.objectContaining({ qualityMode: 'exclude' })
+      );
+    });
+
+    it('composes qualityMode=exclude with other filters', async () => {
+      const getAllPaginated = vi.fn(() => ({ total: 0, rows: [] }));
+      asMock(getWorldRepository).mockReturnValue(
+        createMockRepo({ getAllPaginated })
+      );
+      asMock(getTokenRepository).mockReturnValue(
+        createMockTokenRepo(['worlds:read', 'worlds:write'])
+      );
+
+      const response = await request(app)
+        .get('/api/worlds?qualityMode=exclude&tag=chill&highPriority=true')
+        .set('authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(getAllPaginated).toHaveBeenCalledWith(
+        50,
+        0,
+        expect.objectContaining({
+          qualityMode: 'exclude',
+          tags: ['chill'],
+          highPriorityOnly: true
+        })
       );
     });
 

@@ -1,7 +1,24 @@
+import type { QueryResult } from 'pg';
+import type { Queryable } from './client';
 import { runMigrations } from './schema';
 import { createTestDb, type TestDb } from './testUtils';
-import { WorldRepository } from './worldRepository';
+import { WorldRepository, type WorldRecord } from './worldRepository';
 import { FlagRepository } from './flagRepository';
+import { RoleRepository } from './roleRepository';
+import { TokenRepository } from './tokenRepository';
+
+function queryableWithWinningConcurrentDelete(base: Queryable): Queryable {
+  const wrap = (q: Queryable): Queryable =>
+    ({
+      query: (text: string, values?: unknown[]) =>
+        text.startsWith('DELETE FROM world_records')
+          ? Promise.resolve({ rows: [], rowCount: 0 } as unknown as QueryResult)
+          : q.query(text, values),
+      withTransaction: (fn: (tx: Queryable) => Promise<unknown>) =>
+        q.withTransaction((tx) => fn(wrap(tx)))
+    }) as unknown as Queryable;
+  return wrap(base);
+}
 
 describe('world records', () => {
   let queryable: TestDb['queryable'];
@@ -40,11 +57,86 @@ describe('world records', () => {
     });
   }
 
+  describe('upsert added_by_token_id', () => {
+    function record(worldId: string, tags: string[]): WorldRecord {
+      return {
+        worldId,
+        guildId: 'guild-1',
+        messageId: '1250000000000000000',
+        name: 'Test World',
+        authorName: 'Test Author',
+        capacity: 16,
+        platforms: ['standalonewindows'],
+        tags,
+        imageUrl: null,
+        sourceContent: null,
+        vrchatData: null,
+        packageSizes: [],
+        createdAt: 1717257600
+      };
+    }
+
+    async function seedToken(name: string): Promise<number> {
+      const roles = new RoleRepository(queryable);
+      const viewer = (await roles.findByName('viewer'))!;
+      const { record: token } = await new TokenRepository(queryable).create(
+        name,
+        viewer
+      );
+      return token.id;
+    }
+
+    test('records the token id on every tag row', async () => {
+      const tokenId = await seedToken('upsert-token');
+      await new WorldRepository(queryable).upsert(
+        record('wrld_auth', ['horror', 'game']),
+        tokenId
+      );
+
+      const rows = await queryable.query<{
+        tag: string;
+        added_by_token_id: number;
+      }>(
+        `SELECT tag, added_by_token_id FROM world_tags
+         WHERE world_id = $1 ORDER BY tag`,
+        ['wrld_auth']
+      );
+      expect(rows.rows).toEqual([
+        { tag: 'game', added_by_token_id: tokenId },
+        { tag: 'horror', added_by_token_id: tokenId }
+      ]);
+    });
+
+    test('re-stamps tag rows with the second token on re-upsert', async () => {
+      const firstTokenId = await seedToken('upsert-token-1');
+      const secondTokenId = await seedToken('upsert-token-2');
+      const repo = new WorldRepository(queryable);
+      await repo.upsert(record('wrld_auth', ['horror']), firstTokenId);
+      await repo.upsert(record('wrld_auth', ['kino', 'game']), secondTokenId);
+
+      const rows = await queryable.query<{
+        tag: string;
+        added_by_token_id: number;
+      }>(
+        `SELECT tag, added_by_token_id FROM world_tags
+         WHERE world_id = $1 ORDER BY tag`,
+        ['wrld_auth']
+      );
+      expect(rows.rows).toEqual([
+        { tag: 'game', added_by_token_id: secondTokenId },
+        { tag: 'kino', added_by_token_id: secondTokenId }
+      ]);
+    });
+  });
+
   describe('updateQuality', () => {
     test('sets quality to good', async () => {
       await addWorld('wrld_abc', 'guild-1');
       const repo = new WorldRepository(queryable);
-      expect(await repo.updateQuality('wrld_abc', 'good')).toBe(true);
+      expect(await repo.updateQuality('wrld_abc', 'good')).toEqual({
+        status: 'ok',
+        updated: true
+      });
       expect((await repo.getByWorldId('wrld_abc'))?.quality).toBe('good');
     });
 
@@ -52,19 +144,27 @@ describe('world records', () => {
       await addWorld('wrld_abc', 'guild-1');
       const repo = new WorldRepository(queryable);
       await repo.updateQuality('wrld_abc', 'good');
-      expect(await repo.updateQuality('wrld_abc', null)).toBe(true);
+      expect(await repo.updateQuality('wrld_abc', null)).toEqual({
+        status: 'ok',
+        updated: true
+      });
       expect((await repo.getByWorldId('wrld_abc'))?.quality).toBeNull();
     });
 
     test('clearing an already-null quality reports unchanged', async () => {
       await addWorld('wrld_abc', 'guild-1');
       const repo = new WorldRepository(queryable);
-      expect(await repo.updateQuality('wrld_abc', null)).toBe(false);
+      expect(await repo.updateQuality('wrld_abc', null)).toEqual({
+        status: 'ok',
+        updated: false
+      });
     });
 
-    test('returns false when the world does not exist', async () => {
+    test('reports notFound when the world does not exist', async () => {
       const repo = new WorldRepository(queryable);
-      expect(await repo.updateQuality('wrld_abc', 'good')).toBe(false);
+      expect(await repo.updateQuality('wrld_abc', 'good')).toEqual({
+        status: 'notFound'
+      });
     });
   });
 
@@ -73,8 +173,8 @@ describe('world records', () => {
       await addWorld('wrld_abc', 'guild-1', ['kino'], 'original source');
       const repo = new WorldRepository(queryable);
 
-      expect(await repo.updateTagsOnly('wrld_abc', ['horror', 'game'])).toBe(
-        true
+      expect(await repo.updateTagsOnly('wrld_abc', ['horror', 'game'])).toEqual(
+        { status: 'ok', updated: true }
       );
 
       const record = (await repo.getByWorldId('wrld_abc'))!;
@@ -82,17 +182,57 @@ describe('world records', () => {
       expect(record.sourceContent).toBe('original source');
     });
 
-    test('returns false when the tags are unchanged', async () => {
+    test('reports unchanged when the tags are unchanged', async () => {
       await addWorld('wrld_abc', 'guild-1', ['horror']);
       const repo = new WorldRepository(queryable);
 
-      expect(await repo.updateTagsOnly('wrld_abc', ['horror'])).toBe(false);
+      expect(await repo.updateTagsOnly('wrld_abc', ['horror'])).toEqual({
+        status: 'ok',
+        updated: false
+      });
     });
 
-    test('returns false when the record does not exist', async () => {
+    test('reports notFound when the record does not exist', async () => {
       const repo = new WorldRepository(queryable);
 
-      expect(await repo.updateTagsOnly('wrld_missing', ['horror'])).toBe(false);
+      expect(await repo.updateTagsOnly('wrld_missing', ['horror'])).toEqual({
+        status: 'notFound'
+      });
+    });
+  });
+
+  describe('deleteByWorldId', () => {
+    test('reports notFound when no row was deleted', async () => {
+      const repo = new WorldRepository(queryable);
+
+      expect(await repo.deleteByWorldId('wrld_missing')).toEqual({
+        status: 'notFound'
+      });
+    });
+
+    test('reports notFound when the delete affects no rows', async () => {
+      await addWorld('wrld_abc', 'guild-1');
+      const repo = new WorldRepository(
+        queryableWithWinningConcurrentDelete(queryable)
+      );
+
+      expect(await repo.deleteByWorldId('wrld_abc')).toEqual({
+        status: 'notFound'
+      });
+    });
+
+    test('reports ok, removes the record, and archives it', async () => {
+      await addWorld('wrld_abc', 'guild-1', ['horror']);
+      const repo = new WorldRepository(queryable);
+
+      expect(await repo.deleteByWorldId('wrld_abc')).toEqual({ status: 'ok' });
+      expect(await repo.getByWorldId('wrld_abc')).toBeUndefined();
+
+      const archived = await queryable.query<{ tags: string[] }>(
+        `SELECT tags FROM deleted_world_records WHERE world_id = $1`,
+        ['wrld_abc']
+      );
+      expect(archived.rows[0]?.tags).toEqual(['horror']);
     });
   });
 
@@ -325,6 +465,79 @@ describe('world records', () => {
       const page = await repo.getAllPaginated(10, 0, {
         excludeFlags: ['nonexistent'],
         flagMode: 'include'
+      });
+      expect(page.total).toBe(0);
+      expect(page.rows).toEqual([]);
+    });
+  });
+
+  describe('getAllPaginated qualityMode', () => {
+    test('exclude returns only unrated (NULL quality) worlds', async () => {
+      await addWorld('wrld_good', 'guild-1');
+      await addWorld('wrld_bad', 'guild-1');
+      await addWorld('wrld_unrated', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good', 'good');
+      await repo.updateQuality('wrld_bad', 'bad');
+
+      const page = await repo.getAllPaginated(10, 0, {
+        qualityMode: 'exclude'
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_unrated']);
+    });
+
+    test('exclude composes with other filters via AND', async () => {
+      await addWorld('wrld_unrated_horror', 'guild-1', ['horror']);
+      await addWorld('wrld_good_horror', 'guild-1', ['horror']);
+      await addWorld('wrld_unrated_chill', 'guild-1', ['chill']);
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good_horror', 'good');
+
+      const page = await repo.getAllPaginated(10, 0, {
+        qualityMode: 'exclude',
+        tags: ['horror']
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_unrated_horror']);
+    });
+
+    test('exclude wins over an inclusive quality list', async () => {
+      await addWorld('wrld_good', 'guild-1');
+      await addWorld('wrld_unrated', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good', 'good');
+
+      const page = await repo.getAllPaginated(10, 0, {
+        qualityMode: 'exclude',
+        quality: ['good']
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_unrated']);
+    });
+
+    test('absent qualityMode keeps the inclusive quality filter', async () => {
+      await addWorld('wrld_good', 'guild-1');
+      await addWorld('wrld_bad', 'guild-1');
+      await addWorld('wrld_unrated', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good', 'good');
+      await repo.updateQuality('wrld_bad', 'bad');
+
+      const page = await repo.getAllPaginated(10, 0, { quality: ['good'] });
+      expect(page.total).toBe(1);
+      expect(page.rows.map((r) => r.worldId)).toEqual(['wrld_good']);
+    });
+
+    test('exclude with no unrated worlds returns an empty page', async () => {
+      await addWorld('wrld_good', 'guild-1');
+      await addWorld('wrld_bad', 'guild-1');
+      const repo = new WorldRepository(queryable);
+      await repo.updateQuality('wrld_good', 'good');
+      await repo.updateQuality('wrld_bad', 'bad');
+
+      const page = await repo.getAllPaginated(10, 0, {
+        qualityMode: 'exclude'
       });
       expect(page.total).toBe(0);
       expect(page.rows).toEqual([]);

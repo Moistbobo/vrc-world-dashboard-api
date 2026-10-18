@@ -3,7 +3,8 @@ export const PERMISSIONS = [
   'worlds:write',
   'tags:read',
   'tags:write',
-  'meta:read'
+  'meta:read',
+  'worlds:query'
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

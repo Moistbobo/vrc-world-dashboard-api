@@ -173,10 +173,15 @@ describe('filterWorldsWithWorldName', () => {
     expect(result.map((w) => w.id)).not.toContain('wrld_far');
   });
 
-  it('returns [] for empty or invalid input', () => {
+  it('returns [] for empty input', () => {
     expect(filterWorldsWithWorldName([], 'Tokyo')).toEqual([]);
-    expect(filterWorldsWithWorldName(null as never, 'Tokyo')).toEqual([]);
-    expect(filterWorldsWithWorldName(undefined as never, 'Tokyo')).toEqual([]);
+  });
+
+  it('throws when data is not an array', () => {
+    expect(() => filterWorldsWithWorldName(null as never, 'Tokyo')).toThrow();
+    expect(() =>
+      filterWorldsWithWorldName(undefined as never, 'Tokyo')
+    ).toThrow();
   });
 
   it('returns [] for empty worldName', () => {
@@ -198,8 +203,48 @@ describe('filterWorldsWithAuthorName', () => {
     expect(result?.id).toBe('wrld_alice');
   });
 
+  it('returns the closest by author without falling back to index 0', () => {
+    const data = [
+      makeLimitedWorld('wrld_alice', 'World A', 'Alice'),
+      makeLimitedWorld('wrld_bob', 'World B', 'Bob')
+    ];
+
+    expect(filterWorldsWithAuthorName(data, 'Bob')?.id).toBe('wrld_bob');
+  });
+
   it('returns undefined for empty input', () => {
     expect(filterWorldsWithAuthorName([], 'Alice')).toBeUndefined();
+  });
+
+  it('throws when data is not an array', () => {
+    expect(() => filterWorldsWithAuthorName(null as never, 'Alice')).toThrow();
+    expect(() =>
+      filterWorldsWithAuthorName(undefined as never, 'Alice')
+    ).toThrow();
+  });
+
+  it('ignores empty author names when selecting the closest match', () => {
+    const data = [
+      makeLimitedWorld('wrld_blank', 'World A', ''),
+      makeLimitedWorld('wrld_alice', 'World B', 'Alice')
+    ];
+
+    expect(filterWorldsWithAuthorName(data, 'Alice')?.id).toBe('wrld_alice');
+  });
+
+  it('does not return an empty-author entry even when it is closest', () => {
+    const data = [
+      makeLimitedWorld('wrld_alice', 'World A', 'Alice'),
+      makeLimitedWorld('wrld_blank', 'World B', '')
+    ];
+
+    expect(filterWorldsWithAuthorName(data, 'Bob')?.id).toBe('wrld_alice');
+  });
+
+  it('returns undefined when every author name is empty', () => {
+    const data = [makeLimitedWorld('wrld_blank', 'World A', '')];
+
+    expect(filterWorldsWithAuthorName(data, 'Alice')).toBeUndefined();
   });
 });
 

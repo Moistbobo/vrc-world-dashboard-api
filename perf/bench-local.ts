@@ -10,6 +10,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const url = process.env.BENCH_DATABASE_URL;
 if (!url) throw new Error('BENCH_DATABASE_URL is required');
 
+const label = process.argv[2];
+const resultsFile = label ? `local-${label}.json` : 'local-baseline.json';
+const explainFile = label
+  ? `local-explain-${label}.json`
+  : 'local-explain.json';
+
 const pool = new Pool({ connectionString: url });
 const repo = new WorldRepository(createQueryable(pool));
 
@@ -47,6 +53,20 @@ configs.push({ name: 'search="a"', filters: { search: 'a' } });
 configs.push({
   name: '20 tags + search="a"',
   filters: { tags: popularTags, search: 'a' }
+});
+configs.push({
+  name: 'qualityMode=exclude',
+  filters: { qualityMode: 'exclude' }
+});
+configs.push({
+  name: 'qualityMode=exclude + 20 tags + flags + platform + dayRange',
+  filters: {
+    qualityMode: 'exclude',
+    tags: popularTags,
+    excludeFlags: flagNames,
+    platforms: ['vrchat'],
+    dayRange: 30
+  }
 });
 
 async function timed(fn: () => Promise<unknown>): Promise<number> {
@@ -144,9 +164,20 @@ async function explain(name: string, filters?: object) {
 }
 
 const explains = {
+  unfiltered: await explain('unfiltered', undefined),
   tags20: await explain('tags=20', { tags: popularTags }),
   search: await explain('search=a', { search: 'a' }),
   combined: await explain('combined', {
+    tags: popularTags,
+    excludeFlags: flagNames,
+    platforms: ['vrchat'],
+    dayRange: 30
+  }),
+  qualityExclude: await explain('qualityMode=exclude', {
+    qualityMode: 'exclude'
+  }),
+  qualityExcludeCombined: await explain('qualityMode=exclude+combined', {
+    qualityMode: 'exclude',
     tags: popularTags,
     excludeFlags: flagNames,
     platforms: ['vrchat'],
@@ -155,7 +186,7 @@ const explains = {
 };
 
 await writeFile(
-  path.join(here, 'local-baseline.json'),
+  path.join(here, resultsFile),
   JSON.stringify(
     { generatedAt: new Date().toISOString(), url, results },
     null,
@@ -163,8 +194,8 @@ await writeFile(
   )
 );
 await writeFile(
-  path.join(here, 'local-explain.json'),
+  path.join(here, explainFile),
   JSON.stringify(explains, null, 2)
 );
-console.log('\nartifacts -> perf/local-baseline.json, perf/local-explain.json');
+console.log(`\nartifacts -> perf/${resultsFile}, perf/${explainFile}`);
 await pool.end();
