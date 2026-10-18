@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import swc from 'unplugin-swc';
 
 const src = fileURLToPath(new URL('./src', import.meta.url));
 
@@ -9,6 +10,7 @@ export default defineConfig({
       '@': src
     }
   },
+  plugins: [swc.vite()],
   test: {
     environment: 'node',
     globals: true,
