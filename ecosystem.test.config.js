@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'world-tagger-api-test',
-      script: 'dist/index.js',
+      script: 'dist/main.js',
       cwd: '/home/world-tagger/test/sos-world-tagger-api',
       instances: 1,
       autorestart: true,

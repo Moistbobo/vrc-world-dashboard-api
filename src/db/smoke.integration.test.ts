@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import request from 'supertest';
-import type { Express } from 'express';
+import type { INestApplication } from '@nestjs/common';
 
 /**
  * Full smoke of the tags catalog + world_tags junction against real
@@ -17,7 +17,7 @@ const run = url ? describe : describe.skip;
 
 run('full smoke: tags catalog + world_tags junction', () => {
   let pool: Pool;
-  let app: Express;
+  let app: INestApplication;
   let curatorToken: string;
   let viewerToken: string;
 
@@ -26,7 +26,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
 
     const { createQueryable } = await import('./client.js');
     const { runMigrations } = await import('./schema.js');
-    const { createApiServer } = await import('../apiServer/index.js');
+    const { createTestApp } = await import('../test/create-test-app.js');
     const { RoleRepository } = await import('./roleRepository.js');
     const { TokenRepository } = await import('./tokenRepository.js');
     const { TagRepository } = await import('./tagRepository.js');
@@ -93,10 +93,11 @@ run('full smoke: tags catalog + world_tags junction', () => {
     curatorToken = curator.rawToken;
     viewerToken = viewer.rawToken;
 
-    app = createApiServer();
+    ({ app } = await createTestApp());
   });
 
   afterAll(async () => {
+    await app.close();
     const { closePool } = await import('./pool.js');
     await closePool();
     await pool.end();
@@ -272,7 +273,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
 
   describe('HTTP API against the migrated schema', () => {
     it('GET /api/tags returns every catalog tag with metadata, counts, and fallbacks', async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .get('/api/tags')
         .set('authorization', `Bearer ${viewerToken}`);
       expect(response.status).toBe(200);
@@ -314,7 +315,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('GET /api/worlds filters by tag and includes tags on the payload', async () => {
-      const single = await request(app)
+      const single = await request(app.getHttpServer())
         .get('/api/worlds')
         .query({ tag: 'horror' })
         .set('authorization', `Bearer ${viewerToken}`);
@@ -323,13 +324,13 @@ run('full smoke: tags catalog + world_tags junction', () => {
       expect(single.body.worlds[0].worldId).toBe('wrld_horror');
       expect(single.body.worlds[0].tags).toEqual(['horror', 'game']);
 
-      const multi = await request(app)
+      const multi = await request(app.getHttpServer())
         .get('/api/worlds')
         .query({ tag: ['horror', 'game'] })
         .set('authorization', `Bearer ${viewerToken}`);
       expect(multi.body.total).toBe(1);
 
-      const noMatch = await request(app)
+      const noMatch = await request(app.getHttpServer())
         .get('/api/worlds')
         .query({ tag: ['horror', 'chill'] })
         .set('authorization', `Bearer ${viewerToken}`);
@@ -337,7 +338,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('GET /api/worlds/:worldId includes tags from the junction', async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .get('/api/worlds/wrld_horror')
         .set('authorization', `Bearer ${viewerToken}`);
       expect(response.status).toBe(200);
@@ -345,7 +346,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('PUT /api/worlds/:worldId/tags/edit updates the junction and records the curator', async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .put('/api/worlds/wrld_horror/tags/edit')
         .set('authorization', `Bearer ${curatorToken}`)
         .send({ guildId: 'guild-1', tags: ['horror', 'chill'] });
@@ -369,7 +370,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('rejects invalid tags on the edit endpoint', async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .put('/api/worlds/wrld_horror/tags/edit')
         .set('authorization', `Bearer ${curatorToken}`)
         .send({ guildId: 'guild-1', tags: ['nope'] });
@@ -377,12 +378,12 @@ run('full smoke: tags catalog + world_tags junction', () => {
     });
 
     it('requires a valid token', async () => {
-      const response = await request(app).get('/api/tags');
+      const response = await request(app.getHttpServer()).get('/api/tags');
       expect(response.status).toBe(401);
     });
 
     it('GET /api/meta still works', async () => {
-      const response = await request(app)
+      const response = await request(app.getHttpServer())
         .get('/api/meta')
         .set('authorization', `Bearer ${viewerToken}`);
       expect(response.status).toBe(200);
