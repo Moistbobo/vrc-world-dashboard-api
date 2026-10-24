@@ -69,6 +69,7 @@ const WORLD_ROW = {
   tags: ['horror'],
   flags: [],
   imageUrl: 'https://example.com/img.png',
+  thumbnailImageUrl: 'https://example.com/thumb.png',
   sourceContent: 'secret raw tweet text',
   vrchatData: null,
   packageSizes: [104.5],

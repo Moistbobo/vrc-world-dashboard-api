@@ -50,6 +50,7 @@ describe('world records', () => {
       platforms: ['standalonewindows'],
       tags,
       imageUrl: null,
+      thumbnailImageUrl: null,
       sourceContent,
       vrchatData: null,
       packageSizes: [],
@@ -69,6 +70,7 @@ describe('world records', () => {
         platforms: ['standalonewindows'],
         tags,
         imageUrl: null,
+        thumbnailImageUrl: null,
         sourceContent: null,
         vrchatData: null,
         packageSizes: [],
@@ -545,6 +547,30 @@ describe('world records', () => {
   });
 
   describe('upsert', () => {
+    test('persists thumbnail_image_url and returns it', async () => {
+      const repo = new WorldRepository(queryable);
+      await repo.upsert({
+        worldId: 'wrld_thumb',
+        guildId: 'guild-1',
+        messageId: '1250000000000000000',
+        name: 'Test World',
+        authorName: 'Test Author',
+        capacity: 16,
+        platforms: ['standalonewindows'],
+        tags: [],
+        imageUrl: 'https://example.com/full.png',
+        thumbnailImageUrl: 'https://example.com/thumb.png',
+        sourceContent: null,
+        vrchatData: null,
+        packageSizes: [],
+        createdAt: 1717257600
+      });
+
+      const record = await repo.getByWorldId('wrld_thumb');
+      expect(record?.imageUrl).toBe('https://example.com/full.png');
+      expect(record?.thumbnailImageUrl).toBe('https://example.com/thumb.png');
+    });
+
     test('a resubmission from a different guild updates the row and refreshes guild_id', async () => {
       await addWorld('wrld_abc', 'guild-1', ['horror']);
       const repo = new WorldRepository(queryable);
@@ -559,6 +585,7 @@ describe('world records', () => {
         platforms: ['standalonewindows'],
         tags: ['game'],
         imageUrl: null,
+        thumbnailImageUrl: null,
         sourceContent: null,
         vrchatData: null,
         packageSizes: [],

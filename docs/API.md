@@ -188,6 +188,7 @@ Returns a paginated, filterable list of world records.
       "tags": ["social", "hangout", "bar"],
       "flags": ["furry", "AI slop"],
       "imageUrl": "https://api.vrchat.cloud/api/1/file/...",
+      "thumbnailImageUrl": "https://api.vrchat.cloud/api/1/file/...",
       "vrchatUrl": "https://vrchat.com/home/world/wrld_abc123",
       "quality": "good",
       "highPriority": true,
@@ -988,7 +989,8 @@ Each world object returned by the API has the following fields:
 | `packageSizes`    | (number \| null)[]          | Download size in MB per platform, aligned 1:1 with `platforms`. `null` when the size could not be determined. |
 | `tags`            | string[]                    | Tags applied to this world record.                                                                            |
 | `flags`           | string[]                    | Flags applied to this world (empty array when none). Visible to all tokens.                                   |
-| `imageUrl`        | string \| null              | Thumbnail image URL from VRChat API.                                                                          |
+| `imageUrl`        | string \| null              | Full-size image URL from VRChat API.                                                                          |
+| `thumbnailImageUrl` | string \| null            | Small thumbnail image URL from VRChat API.                                                                    |
 | `vrchatUrl`       | string                      | Link to the world on the VRChat website.                                                                      |
 | `quality`         | `"good"` \| `"bad"` \| null | Manual quality rating (if set). Present only for tokens with `worlds:write`.                                  |
 | `highPriority`    | boolean                     | Whether the world is on the high-priority list. Present only for tokens with `worlds:write`.                  |
