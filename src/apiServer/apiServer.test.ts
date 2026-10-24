@@ -76,6 +76,7 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
           platforms: ['standalonewindows', 'android'],
           tags: ['horror', 'game'],
           imageUrl: 'https://example.com/img.png',
+          thumbnailImageUrl: 'https://example.com/thumb.png',
           sourceContent: null,
           vrchatData: null,
           packageSizes: [104.5, 78.2],
@@ -94,6 +95,7 @@ function createMockRepo(overrides: Record<string, unknown> = {}) {
       platforms: ['standalonewindows', 'android'],
       tags: ['horror', 'game'],
       imageUrl: 'https://example.com/img.png',
+      thumbnailImageUrl: 'https://example.com/thumb.png',
       sourceContent: null,
       vrchatData: null,
       packageSizes: [104.5, 78.2],
@@ -275,6 +277,8 @@ describe('API Server', () => {
       expect(world.quality).toBe('good');
       expect(world.guildId).toBe('guild-1');
       expect(world.packageSizes).toEqual([104.5, 78.2]);
+      expect(world.imageUrl).toBe('https://example.com/img.png');
+      expect(world.thumbnailImageUrl).toBe('https://example.com/thumb.png');
       expect(world.createdAt).toBe('2024-06-01T16:00:00.000Z');
 
       // Server-identifying fields must be stripped
@@ -727,6 +731,7 @@ describe('API Server', () => {
       expect(body.vrchatUrl).toBe('https://vrchat.com/home/world/wrld_abc123');
       expect(body.quality).toBe('good');
       expect(body.guildId).toBe('guild-1');
+      expect(body.thumbnailImageUrl).toBe('https://example.com/thumb.png');
 
       // Stripped fields
       expect(body.sourceContent).toBeUndefined();

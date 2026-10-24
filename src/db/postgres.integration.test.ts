@@ -45,6 +45,7 @@ run('Postgres integration', () => {
       platforms: ['standalonewindows', 'android'],
       tags: ['horror', 'game'],
       imageUrl: null,
+      thumbnailImageUrl: null,
       sourceContent: 'tap jump run',
       vrchatData: null,
       packageSizes: [104.5, 78.2]
@@ -59,6 +60,7 @@ run('Postgres integration', () => {
       platforms: ['android'],
       tags: ['game'],
       imageUrl: null,
+      thumbnailImageUrl: null,
       sourceContent: null,
       vrchatData: null,
       packageSizes: []
@@ -73,6 +75,7 @@ run('Postgres integration', () => {
       platforms: [],
       tags: [],
       imageUrl: null,
+      thumbnailImageUrl: null,
       sourceContent: null,
       vrchatData: null,
       packageSizes: []

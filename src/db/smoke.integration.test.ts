@@ -166,6 +166,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
         platforms: ['standalonewindows'],
         tags: ['chill', 'horror'],
         imageUrl: null,
+        thumbnailImageUrl: null,
         sourceContent: 'new world chill',
         vrchatData: null,
         packageSizes: []
@@ -185,6 +186,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
         platforms: ['standalonewindows'],
         tags: ['game'],
         imageUrl: null,
+        thumbnailImageUrl: null,
         sourceContent: 'new world chill',
         vrchatData: null,
         packageSizes: []
@@ -243,6 +245,7 @@ run('full smoke: tags catalog + world_tags junction', () => {
           platforms: [],
           tags: ['not-a-real-tag'],
           imageUrl: null,
+          thumbnailImageUrl: null,
           sourceContent: null,
           vrchatData: null,
           packageSizes: []
