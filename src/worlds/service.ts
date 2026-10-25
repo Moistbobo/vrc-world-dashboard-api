@@ -60,6 +60,7 @@ function buildWorldRecord(
     platforms: getSupportedPlatforms(worldData.unityPackages ?? []),
     tags: extractTags(content),
     imageUrl: worldData.imageUrl,
+    thumbnailImageUrl: worldData.thumbnailImageUrl || null,
     sourceContent: content,
     vrchatData: JSON.stringify(worldData, (_, v) =>
       typeof v === 'bigint' ? v.toString() : v

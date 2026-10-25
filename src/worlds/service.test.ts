@@ -53,6 +53,7 @@ const WORLD_DATA = {
   authorName: 'VRChat',
   capacity: 40,
   imageUrl: 'https://example.com/img.png',
+  thumbnailImageUrl: 'https://example.com/thumb.png',
   unityPackages: [
     { platform: 'standalonewindows', created_at: '2024-01-01T00:00:00Z' },
     { platform: 'android', created_at: '2024-01-01T00:00:00Z' }
@@ -76,6 +77,7 @@ describe('addWorld', () => {
         platforms: ['standalonewindows'],
         tags: ['horror'],
         imageUrl: null,
+        thumbnailImageUrl: null,
         sourceContent: null,
         vrchatData: null,
         quality: null,
@@ -110,6 +112,10 @@ describe('addWorld', () => {
       expect(result.world.platforms).toEqual(['standalonewindows', 'android']);
       expect(result.world.packageSizes).toEqual([104.5, 78.2]);
       expect(result.world.tags).toEqual(['horror', 'game']);
+      expect(result.world.imageUrl).toBe('https://example.com/img.png');
+      expect(result.world.thumbnailImageUrl).toBe(
+        'https://example.com/thumb.png'
+      );
       expect(result.world.internalAddDate).toBeDefined();
       expect(result.world.vrchatData).toBe(JSON.stringify(WORLD_DATA));
     }

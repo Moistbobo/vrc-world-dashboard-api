@@ -118,7 +118,7 @@ function createFixture(dbPath: string): DatabaseSync {
     '["horror","kino"]',
     'https://img/a.png',
     'source content',
-    '{"version":3}',
+    '{"version":3,"thumbnailImageUrl":"https://thumb/a.png"}',
     '[104.5,78.2]',
     'good',
     1710000100,
@@ -164,7 +164,7 @@ function createFixture(dbPath: string): DatabaseSync {
     '["deleted"]',
     null,
     null,
-    null,
+    '{"thumbnailImageUrl":"https://thumb/gone.png"}',
     '[12.5]',
     1710000400,
     1710000500,
@@ -282,9 +282,10 @@ describe('load-from-sqlite', () => {
       quality: string | null;
       internal_add_date: number | null;
       created_at: number | null;
+      thumbnail_image_url: string | null;
     }>(
       `SELECT world_id, guild_id, name, capacity, platforms, package_sizes,
-              quality, internal_add_date, created_at
+              quality, internal_add_date, created_at, thumbnail_image_url
        FROM world_records ORDER BY world_id`
     );
 
@@ -298,7 +299,8 @@ describe('load-from-sqlite', () => {
       package_sizes: [104.5, 78.2],
       quality: 'good',
       internal_add_date: 1710000100,
-      created_at: 1710000200
+      created_at: 1710000200,
+      thumbnail_image_url: 'https://thumb/a.png'
     });
     expect(worlds.rows[1]).toMatchObject({
       world_id: 'wrld_def',
@@ -308,7 +310,8 @@ describe('load-from-sqlite', () => {
       platforms: [],
       package_sizes: [],
       quality: null,
-      internal_add_date: null
+      internal_add_date: null,
+      thumbnail_image_url: null
     });
 
     const junction = await queryable.query<{
@@ -329,8 +332,9 @@ describe('load-from-sqlite', () => {
       name: string | null;
       package_sizes: number[];
       deleted_at: number | null;
+      thumbnail_image_url: string | null;
     }>(
-      `SELECT world_id, name, package_sizes, deleted_at
+      `SELECT world_id, name, package_sizes, deleted_at, thumbnail_image_url
        FROM deleted_world_records`
     );
     expect(deleted.rows).toEqual([
@@ -338,7 +342,8 @@ describe('load-from-sqlite', () => {
         world_id: 'wrld_gone',
         name: 'Deleted World',
         package_sizes: [12.5],
-        deleted_at: 1710000700
+        deleted_at: 1710000700,
+        thumbnail_image_url: 'https://thumb/gone.png'
       }
     ]);
 

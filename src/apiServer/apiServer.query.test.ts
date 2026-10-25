@@ -61,6 +61,7 @@ const WORLD_ROW = {
   tags: ['horror', 'game'],
   flags: [],
   imageUrl: 'https://example.com/img.png',
+  thumbnailImageUrl: 'https://example.com/thumb.png',
   sourceContent: null,
   vrchatData: null,
   packageSizes: [104.5],

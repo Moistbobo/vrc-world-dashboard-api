@@ -37,6 +37,7 @@ describe('worldRepository query DSL', () => {
       platforms: options.platforms ?? ['standalonewindows'],
       tags: options.tags ?? [],
       imageUrl: null,
+      thumbnailImageUrl: null,
       sourceContent: null,
       vrchatData: null,
       packageSizes: [],

@@ -67,6 +67,7 @@ const WORLD_ROW = {
   platforms: ['standalonewindows', 'android'],
   tags: ['horror', 'game'],
   imageUrl: 'https://example.com/img.png',
+  thumbnailImageUrl: 'https://example.com/thumb.png',
   sourceContent: null,
   vrchatData: null,
   packageSizes: [104.5, 78.2],

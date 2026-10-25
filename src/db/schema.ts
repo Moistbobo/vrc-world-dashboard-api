@@ -422,6 +422,26 @@ export const MIGRATIONS: Migration[] = [
         ['bot', ['worlds:read', 'tags:read', 'meta:read', 'worlds:query']]
       );
     }
+  },
+  {
+    name: '018_add_thumbnail_image_url',
+    run: async (db) => {
+      for (const table of ['world_records', 'deleted_world_records']) {
+        await db.query(
+          `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS thumbnail_image_url text`
+        );
+        await db.query(
+          `UPDATE ${table}
+           SET thumbnail_image_url = CASE
+             WHEN vrchat_data::jsonb ->> 'thumbnailImageUrl' = '' THEN NULL
+             ELSE vrchat_data::jsonb ->> 'thumbnailImageUrl'
+           END
+           WHERE thumbnail_image_url IS NULL
+             AND vrchat_data IS NOT NULL
+             AND vrchat_data <> ''`
+        );
+      }
+    }
   }
 ];
 

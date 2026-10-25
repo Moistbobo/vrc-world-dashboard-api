@@ -232,6 +232,7 @@ async function addWorld(
     platforms: ['standalonewindows'],
     tags: [],
     imageUrl: null,
+    thumbnailImageUrl: null,
     sourceContent: null,
     vrchatData: null,
     packageSizes: [],

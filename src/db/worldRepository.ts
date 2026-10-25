@@ -21,6 +21,7 @@ export interface WorldRecord {
   tags: string[];
   flags?: string[];
   imageUrl: string | null;
+  thumbnailImageUrl: string | null;
   sourceContent: string | null;
   vrchatData: string | null;
   packageSizes: (number | null)[];
@@ -65,6 +66,7 @@ interface WorldRow extends Record<string, unknown> {
   platforms: string[] | null;
   tags: string[] | null;
   image_url: string | null;
+  thumbnail_image_url: string | null;
   source_content: string | null;
   vrchat_data: string | null;
   package_sizes: (number | null)[] | null;
@@ -87,6 +89,7 @@ function rowToRecord(row: WorldRow): WorldRecord {
     tags: toArray<string>(row.tags),
     flags: [],
     imageUrl: row.image_url,
+    thumbnailImageUrl: row.thumbnail_image_url,
     sourceContent: row.source_content,
     vrchatData: row.vrchat_data,
     packageSizes: toArray<number | null>(row.package_sizes),
@@ -119,9 +122,9 @@ export class WorldRepository {
     const sql = `
       INSERT INTO world_records
         (world_id, guild_id, message_id, name, author_name, capacity,
-         platforms, image_url, source_content, vrchat_data, package_sizes, created_at, internal_add_date)
+         platforms, image_url, thumbnail_image_url, source_content, vrchat_data, package_sizes, created_at, internal_add_date)
       VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE($12, (EXTRACT(EPOCH FROM NOW()))::bigint), $13)
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, COALESCE($13, (EXTRACT(EPOCH FROM NOW()))::bigint), $14)
       ON CONFLICT(world_id) DO UPDATE SET
         guild_id = EXCLUDED.guild_id,
         message_id = EXCLUDED.message_id,
@@ -130,6 +133,7 @@ export class WorldRepository {
         capacity = EXCLUDED.capacity,
         platforms = EXCLUDED.platforms,
         image_url = EXCLUDED.image_url,
+        thumbnail_image_url = EXCLUDED.thumbnail_image_url,
         source_content = EXCLUDED.source_content,
         vrchat_data = EXCLUDED.vrchat_data,
         package_sizes = EXCLUDED.package_sizes,
@@ -147,6 +151,7 @@ export class WorldRepository {
         record.capacity,
         record.platforms,
         record.imageUrl,
+        record.thumbnailImageUrl,
         record.sourceContent,
         record.vrchatData,
         record.packageSizes,
@@ -281,8 +286,8 @@ export class WorldRepository {
   async deleteByWorldId(worldId: string): Promise<MutationResult> {
     const archiveSql = `
       INSERT INTO deleted_world_records
-        (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, source_content, vrchat_data, package_sizes, internal_add_date, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        (world_id, guild_id, message_id, name, author_name, capacity, platforms, tags, image_url, thumbnail_image_url, source_content, vrchat_data, package_sizes, internal_add_date, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     `;
     const deleteSql = `DELETE FROM world_records WHERE world_id = $1 RETURNING *`;
 
@@ -306,6 +311,7 @@ export class WorldRepository {
         row.platforms,
         tagsResult.rows.map((r) => r.tag),
         row.image_url,
+        row.thumbnail_image_url,
         row.source_content,
         row.vrchat_data,
         row.package_sizes,

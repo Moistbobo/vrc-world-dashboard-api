@@ -123,6 +123,22 @@ function parsePackageSizes(value: unknown): (number | null)[] {
   }
 }
 
+function parseThumbnailUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed !== 'object' || parsed === null) {
+      return null;
+    }
+    const url = (parsed as { thumbnailImageUrl?: unknown }).thumbnailImageUrl;
+    return typeof url === 'string' && url !== '' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 async function syncSequence(db: Queryable, table: string): Promise<void> {
   await db.query(
     `SELECT setval(
@@ -267,9 +283,9 @@ export async function loadWorldRecords(
     const result = await db.query(
       `INSERT INTO world_records
          (world_id, guild_id, message_id, name, author_name, capacity,
-          platforms, image_url, source_content, vrchat_data, package_sizes,
+          platforms, image_url, thumbnail_image_url, source_content, vrchat_data, package_sizes,
           quality, internal_add_date, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        ON CONFLICT DO NOTHING`,
       [
         row.world_id,
@@ -280,6 +296,7 @@ export async function loadWorldRecords(
         row.capacity,
         parseStringArray(row.platforms),
         row.image_url,
+        parseThumbnailUrl(row.vrchat_data),
         row.source_content,
         row.vrchat_data,
         parsePackageSizes(row.package_sizes),
@@ -335,9 +352,9 @@ export async function loadDeletedWorldRecords(
     const result = await db.query(
       `INSERT INTO deleted_world_records
          (id, world_id, guild_id, message_id, name, author_name, capacity,
-          platforms, tags, image_url, source_content, vrchat_data, package_sizes,
+          platforms, tags, image_url, thumbnail_image_url, source_content, vrchat_data, package_sizes,
           internal_add_date, created_at, updated_at, deleted_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        ON CONFLICT DO NOTHING`,
       [
         row.id,
@@ -350,6 +367,7 @@ export async function loadDeletedWorldRecords(
         parseStringArray(row.platforms),
         parseStringArray(row.tags),
         row.image_url,
+        parseThumbnailUrl(row.vrchat_data),
         row.source_content,
         row.vrchat_data,
         parsePackageSizes(row.package_sizes),
@@ -421,6 +439,9 @@ async function ensureSchema(db: Queryable): Promise<void> {
     logger.info(
       'world_records already exists; seeded _migrations with migration names'
     );
+    // Apply migrations newer than the historical names above so columns the
+    // loader writes (such as thumbnail_image_url) exist before the copy runs.
+    await runMigrations(db);
     return;
   }
 
